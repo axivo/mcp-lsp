@@ -7,6 +7,7 @@
  */
 
 import { ChildProcess, spawn } from 'child_process';
+import fg from 'fast-glob';
 import { readFileSync } from 'fs';
 import { pathToFileURL } from 'node:url';
 import { dirname, join } from 'path';
@@ -19,6 +20,7 @@ import {
 } from 'vscode-jsonrpc/node.js';
 import {
   ClientCapabilities,
+  DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
   ExitNotification,
   InitializedNotification,
@@ -30,6 +32,20 @@ import {
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { LspConfigParser } from './config.js';
+
+const ignoredDirs = [
+  'bin',
+  'build',
+  'cache',
+  'coverage',
+  'dist',
+  'log',
+  'node_modules',
+  'obj',
+  'out',
+  'target',
+  'temp'
+];
 
 interface ServerConnection {
   connection: MessageConnection;
@@ -69,7 +85,7 @@ export class LspClient {
    * Checks and enforces rate limiting per language
    * 
    * @private
-   * @param {string} languageId - Language identifier for rate limiting
+   * @param {string} languageId - Language identifier
    * @returns {boolean} True if within rate limit
    * @throws {Error} When rate limit is exceeded
    */
@@ -90,6 +106,55 @@ export class LspClient {
   }
 
   /**
+     * Creates comprehensive client capabilities for LSP features
+     * 
+     * @private
+     * @returns {ClientCapabilities} Client capabilities
+     */
+  private createClientCapabilities(): ClientCapabilities {
+    return {
+      workspace: {
+        applyEdit: true,
+        configuration: true,
+        didChangeConfiguration: { dynamicRegistration: false },
+        didChangeWatchedFiles: { dynamicRegistration: false },
+        executeCommand: { dynamicRegistration: false },
+        symbol: {
+          dynamicRegistration: false,
+          symbolKind: {
+            valueSet: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+          }
+        },
+        workspaceEdit: {
+          documentChanges: true,
+          failureHandling: 'textOnlyTransactional',
+          resourceOperations: ['create', 'rename', 'delete']
+        },
+        workspaceFolders: true
+      },
+      textDocument: {
+        codeAction: { dynamicRegistration: false },
+        codeLens: { dynamicRegistration: false },
+        completion: { dynamicRegistration: false },
+        definition: { dynamicRegistration: false },
+        documentHighlight: { dynamicRegistration: false },
+        documentSymbol: { dynamicRegistration: false },
+        formatting: { dynamicRegistration: false },
+        hover: { dynamicRegistration: false },
+        implementation: { dynamicRegistration: false },
+        onTypeFormatting: { dynamicRegistration: false },
+        publishDiagnostics: { relatedInformation: false, versionSupport: false },
+        rangeFormatting: { dynamicRegistration: false },
+        references: { dynamicRegistration: false },
+        rename: { dynamicRegistration: false },
+        signatureHelp: { dynamicRegistration: false },
+        synchronization: { dynamicRegistration: false },
+        typeDefinition: { dynamicRegistration: false }
+      }
+    };
+  }
+
+  /**
    * Creates a message connection for an language server process
    * 
    * @private
@@ -106,31 +171,6 @@ export class LspClient {
     });
     connection.listen();
     return connection;
-  }
-
-  /**
-   * Ensures a file is opened in the language server
-   * 
-   * @private
-   * @param {string} filePath - Path to the file
-   * @param {string} languageId - Language identifier
-   * @returns {Promise<void>} Promise that resolves when file is opened
-   */
-  private async ensureFileOpened(filePath: string, languageId: string): Promise<void> {
-    try {
-      const content = readFileSync(filePath, 'utf8');
-      const uri = pathToFileURL(filePath).toString();
-      const textDocument: TextDocumentItem = {
-        uri: uri,
-        languageId: languageId,
-        version: 1,
-        text: content
-      };
-      this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
-      await new Promise(resolve => setTimeout(resolve, 500));
-    } catch (error) {
-      console.warn(`Failed to open file ${filePath}:`, error);
-    }
   }
 
   /**
@@ -163,61 +203,65 @@ export class LspClient {
   }
 
   /**
-   * Initializes project by setting up file watching (no representative file needed)
+   * Initializes project by setting up workspace indexing using VSCode protocol
    * 
    * @private
-   * @param {string} languageId - Language identifier (e.g., 'typescript')
+   * @param {string} languageId - Language identifier
    * @returns {Promise<void>} Promise that resolves when project is initialized
    */
   private async initializeProject(languageId: string): Promise<void> {
     if (this.initializedProjects.has(languageId)) {
       return;
     }
-    this.initializedProjects.add(languageId);
+    const serverConfig = this.configParser.getServerConfig(languageId);
+    if (!serverConfig) {
+      console.warn(`No configuration found for '${languageId}' language server.`);
+      return;
+    }
+    try {
+      const workspaceFolders: WorkspaceFolder[] = serverConfig.projects.map(dir => ({
+        uri: pathToFileURL(dir).toString(),
+        name: dirname(dir).split('/').pop() || 'workspace'
+      }));
+      if (workspaceFolders.length > 0) {
+        this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
+          event: {
+            added: workspaceFolders,
+            removed: []
+          }
+        });
+      }
+      this.initializedProjects.add(languageId);
+    } catch (error) {
+      console.error(`Failed to initialize project for '${languageId}' language server:`, error);
+      this.initializedProjects.add(languageId);
+    }
   }
 
   /**
-   * Creates minimal client capabilities
+   * Finds all files with specified extensions using fast glob search
    * 
    * @private
-   * @returns {ClientCapabilities} Client capabilities
+   * @param {string} dir - Directory to search
+   * @param {string[]} extensions - File extensions
+   * @returns {Promise<string[]>} Array of matching file paths
    */
-  private createClientCapabilities(): ClientCapabilities {
-    return {
-      workspace: {
-        workspaceFolders: true
-      },
-      textDocument: {
-        synchronization: {
-          dynamicRegistration: false
-        },
-        completion: {
-          dynamicRegistration: false
-        },
-        hover: {
-          dynamicRegistration: false
-        },
-        signatureHelp: {
-          dynamicRegistration: false
-        },
-        definition: { dynamicRegistration: false },
-        typeDefinition: { dynamicRegistration: false },
-        implementation: { dynamicRegistration: false },
-        references: { dynamicRegistration: false },
-        documentHighlight: { dynamicRegistration: false },
-        documentSymbol: { dynamicRegistration: false },
-        codeAction: { dynamicRegistration: false },
-        codeLens: { dynamicRegistration: false },
-        formatting: { dynamicRegistration: false },
-        rangeFormatting: { dynamicRegistration: false },
-        onTypeFormatting: { dynamicRegistration: false },
-        rename: { dynamicRegistration: false },
-        publishDiagnostics: {
-          relatedInformation: false,
-          versionSupport: false
-        }
-      }
-    };
+  private async findFiles(dir: string, extensions: string[]): Promise<string[]> {
+    if (extensions.length === 0) {
+      return [];
+    }
+    try {
+      const files = await fg(`**/*.{${extensions.join(',')}}`, {
+        absolute: true,
+        cwd: dir,
+        ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
+        onlyFiles: true
+      });
+      return files;
+    } catch (error) {
+      console.warn(`Failed to find files in ${dir}:`, error);
+      return [];
+    }
   }
 
   /**
@@ -236,19 +280,56 @@ export class LspClient {
       uri: pathToFileURL(dir).toString(),
       name: dir.split('/').pop() || 'workspace'
     }));
+    const rootPath = serverConfig.projects.length === 1 ? serverConfig.projects[0] : null;
+    const rootUri = rootPath ? pathToFileURL(rootPath).toString() : null;
     const initParams: InitializeParams = {
       processId: process.pid,
       clientInfo: {
         name: 'mcp-lsp',
         version: this.version(),
       },
-      rootUri: null,
-      workspaceFolders: workspaceFolders,
+      rootPath,
+      rootUri,
+      workspaceFolders,
       capabilities: this.createClientCapabilities(),
     };
     const serverConnection = this.connections.get(languageId)!;
     await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
+    for (const projectPath of serverConfig.projects) {
+      const files = await this.findFiles(projectPath, serverConfig.extensions);
+      await this.openFiles(files, languageId);
+    }
+  }
+
+  /**
+   * Opens multiple files in the language server
+   * 
+   * @private
+   * @param {string[]} files - File paths to open
+   * @param {string} languageId - Language identifier
+   * @returns {Promise<void>} Promise that resolves when all files are opened
+   */
+  private async openFiles(files: string[], languageId: string): Promise<void> {
+    if (files.length === 0) {
+      return;
+    }
+    const open = files.map(async (file) => {
+      try {
+        const uri = pathToFileURL(file).toString();
+        const text = readFileSync(file, 'utf8');
+        const textDocument: TextDocumentItem = {
+          uri,
+          languageId,
+          version: 1,
+          text
+        };
+        this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
+      } catch (error) {
+        console.warn(`Failed to open '${file}' file:`, error);
+      }
+    });
+    await Promise.all(open);
   }
 
   /**
@@ -314,6 +395,7 @@ export class LspClient {
       throw new Error(`Unknown language: ${languageId}`);
     }
     await this.stopServer(languageId);
+    this.initializedProjects.delete(languageId);
     await this.startServer(languageId);
   }
 
@@ -348,7 +430,6 @@ export class LspClient {
     }
     if (method === WorkspaceSymbolRequest.method) {
       await this.initializeProject(languageId);
-      await new Promise(resolve => setTimeout(resolve, 1000));
     }
     const serverConnection = this.connections.get(languageId);
     if (!serverConnection || !serverConnection.process.stdin) {
@@ -365,23 +446,27 @@ export class LspClient {
   /**
    * Sends a file request to the appropriate language server
    * 
-   * @param {string} filePath - Path to the file
+   * @param {string} file - Path to the file
    * @param {string} method - Method name from typed request
    * @param {any} params - Method parameters
    * @returns {Promise<any>} Promise that resolves with the response
    */
-  async sendServerRequest(filePath: string, method: string, params: any): Promise<any> {
-    const serverInfo = this.getServerInfo(filePath);
+  async sendServerRequest(file: string, method: string, params: any): Promise<any> {
+    const serverInfo = this.getServerInfo(file);
     if (!serverInfo) {
-      throw new Error(`No language server configured for '${filePath}' file.`);
+      throw new Error(`No language server configured for '${file}' file.`);
     }
     const [languageId, serverConfig] = serverInfo;
     if (!this.isServerRunning(languageId)) {
       throw new Error(`Language server '${languageId}' is not running.`);
     }
-    if (method.startsWith('textDocument/')) {
-      await this.ensureFileOpened(filePath, languageId);
-    }
+    // TEMPORARILY DISABLED FOR DEBUGGING
+    // if (method.startsWith('textDocument/')) {
+    //   for (const projectPath of serverConfig.projects) {
+    //     const files = await this.findFiles(projectPath, serverConfig.extensions);
+    //     await this.openFiles(files, languageId);
+    //   }
+    // }
     return this.sendRequest(languageId, method, params);
   }
 
@@ -456,11 +541,16 @@ export class LspClient {
       await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
       serverConnection.connection.sendNotification(ExitNotification.method, {});
       serverConnection.connection.dispose();
-      setTimeout(() => {
-        if (!serverConnection.process.killed) {
-          serverConnection.process.kill('SIGTERM');
-        }
-      }, 1000);
+      if (!serverConnection.process.killed) {
+        serverConnection.process.kill('SIGTERM');
+        await new Promise<void>((resolve) => {
+          const handleExit = () => {
+            serverConnection.process.removeListener('exit', handleExit);
+            resolve();
+          };
+          serverConnection.process.on('exit', handleExit);
+        });
+      }
     } catch (error) {
       console.warn(`Error stopping '${languageId}' language server:`, error);
       serverConnection.process.kill('SIGKILL');

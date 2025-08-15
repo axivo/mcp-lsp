@@ -107,7 +107,7 @@ export class LspMcpServer {
   private getLspTools(): Tool[] {
     return [
       this.getServerStatusTool(),
-      this.getSymbolDefinitionTool(),
+      this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getWorkspaceSymbolsTool(),
       this.restartServerTool(),
@@ -137,15 +137,15 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for getting symbol definition location
+   * Tool definition for getting symbol definition locations
    * 
    * @private
-   * @returns {Tool} Symbol definition tool
+   * @returns {Tool} Symbol definitions tool
    */
-  private getSymbolDefinitionTool(): Tool {
+  private getSymbolDefinitionsTool(): Tool {
     return {
-      name: 'get_symbol_definition',
-      description: 'Get symbol definition location',
+      name: 'get_symbol_definitions',
+      description: 'Get all symbol definition locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -309,13 +309,13 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles get symbol definition tool requests
+   * Handles get symbol definitions tool requests
    * 
    * @private
    * @param {GetSymbolArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetSymbolDefinition(args: GetSymbolArgs): Promise<any> {
+  private async handleGetSymbolDefinitions(args: GetSymbolArgs): Promise<any> {
     if (!args.file_path || args.line === undefined || args.character === undefined) {
       throw new Error('Missing required arguments: file_path, line, and character');
     }
@@ -359,15 +359,17 @@ export class LspMcpServer {
       throw new Error('Missing required argument: query');
     }
     const results: any[] = [];
-    for (const serverName of this.lspClient.getServers()) {
-      try {
-        const params: WorkspaceSymbolParams = { query: args.query };
-        const result = await this.lspClient.sendRequest(serverName, WorkspaceSymbolRequest.method, params);
-        if (result && Array.isArray(result)) {
-          results.push(...result.map((symbol: any) => ({ ...symbol, server: serverName })));
+    for (const languageId of this.lspClient.getServers()) {
+      if (this.lspClient.isServerRunning(languageId)) {
+        try {
+          const params: WorkspaceSymbolParams = { query: args.query };
+          const result = await this.lspClient.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
+          if (result && Array.isArray(result)) {
+            results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
+          }
+        } catch (error) {
+          console.warn(`Error querying workspace symbols from '${languageId}' language server:`, error);
         }
-      } catch (error) {
-        console.warn(`Error querying workspace symbols from ${serverName}:`, error);
       }
     }
     return this.createResponse(results);
@@ -474,7 +476,7 @@ export class LspMcpServer {
    */
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
-    this.toolHandlers.set('get_symbol_definition', this.handleGetSymbolDefinition.bind(this));
+    this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_workspace_symbols', this.handleGetWorkspaceSymbols.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
