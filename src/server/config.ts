@@ -15,8 +15,8 @@ interface Config {
 interface ServerConfig {
   command: string;
   args: string[];
-  projects: string[];
   extensions: string[];
+  projects: Record<string, string>;
 }
 
 /**
@@ -94,8 +94,13 @@ export class LspConfigParser {
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
         throw new Error(`Language server '${languageId}' must have at least one extension`);
       }
-      if (!Array.isArray(serverConfig.projects) || serverConfig.projects.length === 0) {
-        throw new Error(`Language server '${languageId}' must have at least one project directory`);
+      if (!serverConfig.projects || typeof serverConfig.projects !== 'object' || Object.keys(serverConfig.projects).length === 0) {
+        throw new Error(`Language server '${languageId}' must have at least one project in the projects object`);
+      }
+      for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
+        if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+          throw new Error(`Language server '${languageId}' project '${projectName}' must have a valid path string`);
+        }
       }
     }
   }
@@ -118,8 +123,8 @@ export class LspConfigParser {
   getServerConfig(languageId: string): {
     command: string;
     args: string[];
-    projects: string[];
     extensions: string[];
+    projects: Record<string, string>;
   } | null {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
@@ -128,8 +133,8 @@ export class LspConfigParser {
     return {
       command: serverConfig.command,
       args: serverConfig.args,
-      projects: serverConfig.projects,
-      extensions: serverConfig.extensions
+      extensions: serverConfig.extensions,
+      projects: serverConfig.projects
     };
   }
 

@@ -66,10 +66,10 @@ export class LspClient {
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
   private rateLimiter: Map<string, number> = new Map();
+  private serverStartTimes: Map<string, number> = new Map();
+  private projectFiles: Map<string, Map<string, string[]>> = new Map();
   private readonly RATE_LIMIT_MAX_REQUESTS = 100;
   private readonly RATE_LIMIT_WINDOW = 60000;
-  private serverStartTimes: Map<string, number> = new Map();
-  private projectFiles: Map<string, string[]> = new Map();
 
   /**
    * Creates a new LspClient instance
@@ -107,12 +107,194 @@ export class LspClient {
   }
 
   /**
-     * Creates comprehensive client capabilities for LSP features
+   * Creates a message connection for an language server process
+   * 
+   * @private
+   * @param {ChildProcess} process - Language server process
+   * @returns {MessageConnection} Message connection
+   */
+  private createConnection(process: ChildProcess): MessageConnection {
+    const connection = createMessageConnection(
+      new StreamMessageReader(process.stdout!),
+      new StreamMessageWriter(process.stdin!)
+    );
+    connection.onError((error) => {
+      console.error('Connection error:', error);
+    });
+    connection.listen();
+    return connection;
+  }
+
+  /**
+   * Gets server information for a specific file path
+   * 
+   * @private
+   * @param {string} filePath - Path to the file
+   * @returns {string} Language identifier of the running server that handles the file
+   */
+  private getServerInfo(filePath: string): string {
+    if (this.connections.size === 0) {
+      throw new Error('No language servers are currently running.');
+    }
+    const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
+    for (const [languageId, _] of this.connections) {
+      const serverConfig = this.configParser.getServerConfig(languageId);
+      if (!serverConfig) continue;
+      const isProjectPath = Object.values(serverConfig.projects).some(path => absolutePath.startsWith(path));
+      if (isProjectPath) {
+        for (const ext of serverConfig.extensions) {
+          if (filePath.endsWith(ext)) {
+            return languageId;
+          }
+        }
+      }
+    }
+    throw new Error(`File '${filePath}' does not belong to running language server`);
+  }
+
+  /**
+   * Initializes projects by setting up workspace indexing using VSCode protocol
+   * 
+   * @private
+   * @param {string} languageId - Language identifier
+   * @returns {Promise<void>} Promise that resolves when project is initialized
+   */
+  private async initializeProjects(languageId: string): Promise<void> {
+    if (this.initializedProjects.has(languageId)) {
+      return;
+    }
+    const serverConfig = this.configParser.getServerConfig(languageId);
+    if (!serverConfig) {
+      console.warn(`No configuration found for '${languageId}' language server.`);
+      return;
+    }
+    try {
+      const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
+        name,
+        uri: pathToFileURL(path).toString()
+      }));
+      if (workspaceFolders.length > 0) {
+        this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
+          event: {
+            added: workspaceFolders,
+            removed: []
+          }
+        });
+      }
+      this.initializedProjects.add(languageId);
+    } catch (error) {
+      console.error(`Failed to initialize projects for '${languageId}' language server:`, error);
+      this.initializedProjects.add(languageId);
+    }
+  }
+
+  /**
+   * Finds all files with specified extensions using fast glob search
+   * 
+   * @private
+   * @param {string} dir - Directory to search
+   * @param {string[]} extensions - File extensions
+   * @returns {Promise<string[]>} Array of matching file paths
+   */
+  private async findFiles(dir: string, extensions: string[]): Promise<string[]> {
+    if (extensions.length === 0) {
+      return [];
+    }
+    try {
+      const files = await fg(`**/*{${extensions.join(',')}}`, {
+        absolute: true,
+        cwd: dir,
+        ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
+        onlyFiles: true
+      });
+      return files;
+    } catch (error) {
+      console.warn(`Failed to find files in '${dir}' directory:`, error);
+      return [];
+    }
+  }
+
+  /**
+   * Initializes an language server with the initialize request
+   * 
+   * @private
+   * @param {string} languageId - Language identifier
+   * @returns {Promise<void>} Promise that resolves when initialized
+   */
+  private async initializeServer(languageId: string): Promise<void> {
+    const serverConfig = this.configParser.getServerConfig(languageId);
+    if (!serverConfig) {
+      throw new Error(`Unknown language: ${languageId}`);
+    }
+    const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
+      name,
+      uri: pathToFileURL(path).toString()
+    }));
+    const projects = Object.values(serverConfig.projects);
+    const rootPath = projects.length === 1 ? projects[0] : null;
+    const rootUri = rootPath ? pathToFileURL(rootPath).toString() : null;
+    const initParams: InitializeParams = {
+      capabilities: this.setClientCapabilities(),
+      clientInfo: {
+        name: 'mcp-lsp',
+        version: this.version(),
+      },
+      processId: process.pid,
+      rootPath,
+      rootUri,
+      workspaceFolders
+    };
+    const serverConnection = this.connections.get(languageId)!;
+    await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
+    serverConnection.connection.sendNotification(InitializedNotification.method, {});
+    const cachedFiles = new Map<string, string[]>();
+    for (const [name, path] of Object.entries(serverConfig.projects)) {
+      const files = await this.findFiles(path, serverConfig.extensions);
+      if (files.length > 0) {
+        await this.openFiles([files[0]], languageId);
+        cachedFiles.set(name, files);
+      }
+    }
+    this.projectFiles.set(languageId, cachedFiles);
+  }
+
+  /**
+   * Opens multiple files in the language server
+   * 
+   * @private
+   * @param {string[]} files - File paths to open
+   * @param {string} languageId - Language identifier
+   * @returns {Promise<void>} Promise that resolves when all files are opened
+   */
+  private async openFiles(files: string[], languageId: string): Promise<void> {
+    if (files.length === 0) {
+      return;
+    }
+    const open = files.map(async (file) => {
+      try {
+        const uri = pathToFileURL(file).toString();
+        const text = readFileSync(file, 'utf8');
+        const textDocument: TextDocumentItem = {
+          uri,
+          languageId,
+          version: 1,
+          text
+        };
+        this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
+      } catch (error) {
+        console.warn(`Failed to open '${file}' file:`, error);
+      }
+    });
+    await Promise.all(open);
+  }
+
+  /**
+     * Sets comprehensive client capabilities for LSP features
      * 
      * @private
      * @returns {ClientCapabilities} Client capabilities
      */
-  private createClientCapabilities(): ClientCapabilities {
+  private setClientCapabilities(): ClientCapabilities {
     return {
       workspace: {
         applyEdit: true,
@@ -156,205 +338,19 @@ export class LspClient {
   }
 
   /**
-   * Creates a message connection for an language server process
-   * 
-   * @private
-   * @param {ChildProcess} process - Language server process
-   * @returns {MessageConnection} Message connection
-   */
-  private createConnection(process: ChildProcess): MessageConnection {
-    const connection = createMessageConnection(
-      new StreamMessageReader(process.stdout!),
-      new StreamMessageWriter(process.stdin!)
-    );
-    connection.onError((error) => {
-      console.error('Connection error:', error);
-    });
-    connection.listen();
-    return connection;
-  }
-
-  /**
-   * Gets server configuration for a specific file path
-   * 
-   * @private
-   * @param {string} filePath - Path to the file
-   * @returns {[string, object] | null} Language identifier and config, or null if no match
-   */
-  private getServerInfo(filePath: string): [string, {
-    command: string;
-    args: string[];
-    projects: string[];
-    extensions: string[];
-  }] | null {
-    const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
-    for (const languageId of this.configParser.getServers()) {
-      const serverConfig = this.configParser.getServerConfig(languageId);
-      if (!serverConfig) continue;
-      const isInDirectory = serverConfig.projects.some(dir => absolutePath.startsWith(dir));
-      if (isInDirectory) {
-        for (const ext of serverConfig.extensions) {
-          if (filePath.endsWith(ext)) {
-            return [languageId, serverConfig];
-          }
-        }
-      }
-    }
-    return null;
-  }
-
-  /**
-   * Initializes project by setting up workspace indexing using VSCode protocol
-   * 
-   * @private
-   * @param {string} languageId - Language identifier
-   * @returns {Promise<void>} Promise that resolves when project is initialized
-   */
-  private async initializeProject(languageId: string): Promise<void> {
-    if (this.initializedProjects.has(languageId)) {
-      return;
-    }
-    const serverConfig = this.configParser.getServerConfig(languageId);
-    if (!serverConfig) {
-      console.warn(`No configuration found for '${languageId}' language server.`);
-      return;
-    }
-    try {
-      const workspaceFolders: WorkspaceFolder[] = serverConfig.projects.map(dir => ({
-        uri: pathToFileURL(dir).toString(),
-        name: dirname(dir).split('/').pop() || 'workspace'
-      }));
-      if (workspaceFolders.length > 0) {
-        this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
-          event: {
-            added: workspaceFolders,
-            removed: []
-          }
-        });
-      }
-      this.initializedProjects.add(languageId);
-    } catch (error) {
-      console.error(`Failed to initialize project for '${languageId}' language server:`, error);
-      this.initializedProjects.add(languageId);
-    }
-  }
-
-  /**
-   * Finds all files with specified extensions using fast glob search
-   * 
-   * @private
-   * @param {string} dir - Directory to search
-   * @param {string[]} extensions - File extensions
-   * @returns {Promise<string[]>} Array of matching file paths
-   */
-  private async findFiles(dir: string, extensions: string[]): Promise<string[]> {
-    if (extensions.length === 0) {
-      return [];
-    }
-    try {
-      const files = await fg(`**/*{${extensions.join(',')}}`, {
-        absolute: true,
-        cwd: dir,
-        ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
-        onlyFiles: true
-      });
-      return files;
-    } catch (error) {
-      console.warn(`Failed to find files in '${dir}' directory:`, error);
-      return [];
-    }
-  }
-
-  /**
-   * Initializes an language server with the initialize request
-   * 
-   * @private
-   * @param {string} languageId - Language identifier
-   * @returns {Promise<void>} Promise that resolves when initialized
-   */
-  private async initializeServer(languageId: string): Promise<void> {
-    const serverConfig = this.configParser.getServerConfig(languageId);
-    if (!serverConfig) {
-      throw new Error(`Unknown language: ${languageId}`);
-    }
-    const workspaceFolders: WorkspaceFolder[] = serverConfig.projects.map(dir => ({
-      uri: pathToFileURL(dir).toString(),
-      name: dir.split('/').pop() || 'workspace'
-    }));
-    const rootPath = serverConfig.projects.length === 1 ? serverConfig.projects[0] : null;
-    const rootUri = rootPath ? pathToFileURL(rootPath).toString() : null;
-    const initParams: InitializeParams = {
-      processId: process.pid,
-      clientInfo: {
-        name: 'mcp-lsp',
-        version: this.version(),
-      },
-      rootPath,
-      rootUri,
-      workspaceFolders,
-      capabilities: this.createClientCapabilities(),
-    };
-    const serverConnection = this.connections.get(languageId)!;
-    await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
-    serverConnection.connection.sendNotification(InitializedNotification.method, {});
-    const cachedFiles: string[] = [];
-    for (const projectPath of serverConfig.projects) {
-      const files = await this.findFiles(projectPath, serverConfig.extensions);
-      if (files.length > 0) {
-        await this.openFiles([files[0]], languageId);
-        cachedFiles.push(...files);
-      }
-    }
-    this.projectFiles.set(languageId, cachedFiles);
-  }
-
-  /**
-   * Opens multiple files in the language server
-   * 
-   * @private
-   * @param {string[]} files - File paths to open
-   * @param {string} languageId - Language identifier
-   * @returns {Promise<void>} Promise that resolves when all files are opened
-   */
-  private async openFiles(files: string[], languageId: string): Promise<void> {
-    if (files.length === 0) {
-      return;
-    }
-    const open = files.map(async (file) => {
-      try {
-        const uri = pathToFileURL(file).toString();
-        const text = readFileSync(file, 'utf8');
-        const textDocument: TextDocumentItem = {
-          uri,
-          languageId,
-          version: 1,
-          text
-        };
-        this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
-      } catch (error) {
-        console.warn(`Failed to open '${file}' file:`, error);
-      }
-    });
-    await Promise.all(open);
-  }
-
-  /**
-   * Sets up process event handlers for a language server
+   * Sets process event handlers for a language server
    * 
    * @private
    * @param {string} languageId - Language identifier
    * @param {ChildProcess} process - Language server process
    */
-  private setupProcessHandlers(languageId: string, process: ChildProcess): void {
-    process.stderr!.on('data', (data: Buffer) => {
-      console.error(`[${languageId}] STDERR:`, data.toString());
-    });
-    process.on('exit', (code) => {
+  private setProcessHandlers(languageId: string, process: ChildProcess): void {
+    process.on('error', (error) => {
+      console.error(`Language server '${languageId}' error:`, error);
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
-    process.on('error', (error) => {
-      console.error(`Language server '${languageId}' error:`, error);
+    process.on('exit', (code) => {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
@@ -388,6 +384,21 @@ export class LspClient {
    */
   isServerRunning(languageId: string): boolean {
     return this.connections.has(languageId);
+  }
+
+  /**
+   * Loads files for a specific project into the language server
+   * 
+   * @param {string} languageId - Language identifier
+   * @param {string} projectName - Project name to load files for
+   * @returns {Promise<void>} Promise that resolves when files are loaded
+   */
+  async loadProjectFiles(languageId: string, projectName: string): Promise<void> {
+    const cachedFiles = this.projectFiles.get(languageId);
+    if (cachedFiles) {
+      const projectFiles = cachedFiles.get(projectName) || [];
+      await this.openFiles(projectFiles, languageId);
+    }
   }
 
   /**
@@ -435,7 +446,7 @@ export class LspClient {
       throw new Error(`Language server '${languageId}' is not running.`);
     }
     if (method === WorkspaceSymbolRequest.method) {
-      await this.initializeProject(languageId);
+      await this.initializeProjects(languageId);
     }
     const serverConnection = this.connections.get(languageId);
     if (!serverConnection || !serverConnection.process.stdin) {
@@ -458,17 +469,25 @@ export class LspClient {
    * @returns {Promise<any>} Promise that resolves with the response
    */
   async sendServerRequest(file: string, method: string, params: any): Promise<any> {
-    const serverInfo = this.getServerInfo(file);
-    if (!serverInfo) {
-      throw new Error(`No language server configured for '${file}' file.`);
-    }
-    const [languageId, serverConfig] = serverInfo;
+    const languageId = this.getServerInfo(file);
     if (!this.isServerRunning(languageId)) {
       throw new Error(`Language server '${languageId}' is not running.`);
     }
     if (method.startsWith('textDocument/')) {
-      const cachedFiles = this.projectFiles.get(languageId) || [];
-      await this.openFiles(cachedFiles, languageId);
+      const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);
+      const cachedFiles = this.projectFiles.get(languageId);
+      if (cachedFiles) {
+        const serverConfig = this.configParser.getServerConfig(languageId);
+        if (serverConfig) {
+          for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
+            if (absolutePath.startsWith(projectPath)) {
+              const projectFiles = cachedFiles.get(projectName) || [];
+              await this.openFiles(projectFiles, languageId);
+              break;
+            }
+          }
+        }
+      }
     }
     return this.sendRequest(languageId, method, params);
   }
@@ -502,11 +521,12 @@ export class LspClient {
       throw new Error(`Unknown language server: ${languageId}`);
     }
     try {
-      const workspaceRoot = serverConfig.projects.length > 0 ? serverConfig.projects[0] : process.cwd();
+      const projectPaths = Object.values(serverConfig.projects);
+      const workspaceRoot = projectPaths.length > 0 ? projectPaths[0] : process.cwd();
       const childProcess = spawn(serverConfig.command, serverConfig.args, {
-        stdio: ['pipe', 'pipe', 'pipe'],
-        env: { ...process.env },
         cwd: workspaceRoot,
+        env: { ...process.env },
+        stdio: ['pipe', 'pipe', 'pipe']
       });
       if (!childProcess.stdout || !childProcess.stdin || !childProcess.stderr) {
         throw new Error(`Failed to create stdio pipes for '${languageId}' language server`);
@@ -514,12 +534,12 @@ export class LspClient {
       const connection = this.createConnection(childProcess);
       const serverConnection: ServerConnection = {
         connection,
-        process: childProcess,
-        initialized: false
+        initialized: false,
+        process: childProcess
       };
       this.connections.set(languageId, serverConnection);
       this.serverStartTimes.set(languageId, Date.now());
-      this.setupProcessHandlers(languageId, childProcess);
+      this.setProcessHandlers(languageId, childProcess);
       await this.initializeServer(languageId);
       serverConnection.initialized = true;
     } catch (error) {

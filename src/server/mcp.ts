@@ -24,37 +24,37 @@ import {
 } from 'vscode-languageserver-protocol';
 import { LspClient } from "./client.js";
 
-interface GetSymbolArgs {
-  file_path: string;
-  line: number;
-  character: number;
-}
-
-interface GetSymbolReferencesArgs {
-  file_path: string;
-  line: number;
-  character: number;
-  include_declaration?: boolean;
-}
-
-interface GetWorkspaceSymbolsArgs {
-  query: string;
-}
-
 interface GetServerStatusArgs {
   language_id: string;
 }
 
-interface RestartServerArgs {
-  server_name?: string;
-  file_path?: string;
+interface GetSymbolArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
-interface StopServerArgs {
+interface GetSymbolReferencesArgs {
+  character: number;
+  file_path: string;
+  line: number;
+  include_declaration?: boolean;
+}
+
+interface GetWorkspaceSymbolsArgs {
+  project_name: string;
+  query: string;
+}
+
+interface RestartServerArgs {
   language_id: string;
 }
 
 interface StartServerArgs {
+  language_id: string;
+}
+
+interface StopServerArgs {
   language_id: string;
 }
 
@@ -91,7 +91,7 @@ export class LspMcpServer {
    * Creates a standardized response for tool execution
    * 
    * @private
-   * @param {any} response - The response data from LSP server
+   * @param {any} response - The response data from language server
    * @returns {Object} Standardized MCP response format
    */
   private createResponse(response: any): any {
@@ -112,12 +112,12 @@ export class LspMcpServer {
       this.getWorkspaceSymbolsTool(),
       this.restartServerTool(),
       this.startServerTool(),
-      this.stopServerTool(),
+      this.stopServerTool()
     ];
   }
 
   /**
-   * Tool definition for getting LSP server status
+   * Tool definition for getting language server status
    * 
    * @private
    * @returns {Tool} Server status tool
@@ -125,14 +125,14 @@ export class LspMcpServer {
   private getServerStatusTool(): Tool {
     return {
       name: 'get_server_status',
-      description: 'Get status of a specific LSP server (running, indexing, ready)',
+      description: 'Get status of a specific language server',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., typescript, python)' },
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
         },
-        required: ['language_id'],
-      },
+        required: ['language_id']
+      }
     };
   }
 
@@ -149,12 +149,12 @@ export class LspMcpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          file_path: { type: 'string', description: 'Path to the file' },
-          line: { type: 'number', description: 'Line number (zero-based)' },
           character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
         },
-        required: ['file_path', 'line', 'character'],
-      },
+        required: ['character', 'file_path', 'line']
+      }
     };
   }
 
@@ -171,13 +171,13 @@ export class LspMcpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          file_path: { type: 'string', description: 'Path to the file' },
-          line: { type: 'number', description: 'Line number (zero-based)' },
           character: { type: 'number', description: 'Character position (zero-based)' },
-          include_declaration: { type: 'boolean', description: 'Include declaration in results', default: true },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          include_declaration: { type: 'boolean', description: 'Include declaration in results', default: true }
         },
-        required: ['file_path', 'line', 'character'],
-      },
+        required: ['character', 'file_path', 'line']
+      }
     };
   }
 
@@ -194,70 +194,11 @@ export class LspMcpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          query: { type: 'string', description: 'Symbol search query' },
+          project_name: { type: 'string', description: 'Project name to search within' },
+          query: { type: 'string', description: 'Symbol search query' }
         },
-        required: ['query'],
-      },
-    };
-  }
-
-  /**
-   * Tool definition for restarting LSP servers
-   * 
-   * @private
-   * @returns {Tool} Restart server tool
-   */
-  private restartServerTool(): Tool {
-    return {
-      name: 'restart_server',
-      description: 'Restart specific language server',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          server_name: { type: 'string', description: 'Name of the server to restart' },
-          file_path: { type: 'string', description: 'File path to determine server (alternative to server_name)' },
-        },
-      },
-    };
-  }
-
-  /**
-   * Tool definition for starting LSP servers
-   * 
-   * @private
-   * @returns {Tool} Start server tool
-   */
-  private startServerTool(): Tool {
-    return {
-      name: 'start_server',
-      description: 'Start a specific LSP server',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., typescript, python)' },
-        },
-        required: ['language_id'],
-      },
-    };
-  }
-
-  /**
-   * Tool definition for stopping LSP servers
-   * 
-   * @private
-   * @returns {Tool} Stop server tool
-   */
-  private stopServerTool(): Tool {
-    return {
-      name: 'stop_server',
-      description: 'Stop a specific LSP server',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., typescript, python)' },
-        },
-        required: ['language_id'],
-      },
+        required: ['project_name', 'query']
+      }
     };
   }
 
@@ -273,11 +214,10 @@ export class LspMcpServer {
       throw new Error('Missing required argument: language_id');
     }
     try {
-      const isRunning = this.lspClient.isServerRunning(args.language_id);
+      const isServerRunning = this.lspClient.isServerRunning(args.language_id);
       let status = 'stopped';
       let indexingStatus = 'unknown';
-
-      if (isRunning) {
+      if (isServerRunning) {
         status = 'running';
         try {
           const params: WorkspaceSymbolParams = { query: 'test' };
@@ -289,19 +229,18 @@ export class LspMcpServer {
           indexingStatus = 'indexing';
         }
       }
-
       const serverStatus = {
+        indexingStatus,
         language_id: args.language_id,
         status,
-        indexingStatus,
-        uptime: isRunning ? this.lspClient.getServerUptime(args.language_id) : 0
+        uptime: isServerRunning ? this.lspClient.getServerUptime(args.language_id) : 0
       };
       return this.createResponse(serverStatus);
     } catch (error) {
       const errorStatus = {
+        indexingStatus: 'unknown',
         language_id: args.language_id,
         status: 'error',
-        indexingStatus: 'unknown',
         error: error instanceof Error ? error.message : String(error)
       };
       return this.createResponse(errorStatus);
@@ -316,12 +255,12 @@ export class LspMcpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbolDefinitions(args: GetSymbolArgs): Promise<any> {
-    if (!args.file_path || args.line === undefined || args.character === undefined) {
-      throw new Error('Missing required arguments: file_path, line, and character');
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      throw new Error('Missing required arguments: character, file_path, and line');
     }
     const params: TextDocumentPositionParams = {
-      textDocument: { uri: `file://${args.file_path}` },
-      position: { line: args.line, character: args.character },
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.lspClient.sendServerRequest(args.file_path, DefinitionRequest.method, params);
     return this.createResponse(result);
@@ -335,13 +274,13 @@ export class LspMcpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbolReferences(args: GetSymbolReferencesArgs): Promise<any> {
-    if (!args.file_path || args.line === undefined || args.character === undefined) {
-      throw new Error('Missing required arguments: file_path, line, and character');
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      throw new Error('Missing required arguments: character, file_path, and line');
     }
     const params: ReferenceParams = {
-      textDocument: { uri: `file://${args.file_path}` },
-      position: { line: args.line, character: args.character },
       context: { includeDeclaration: args.include_declaration ?? true },
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.lspClient.sendServerRequest(args.file_path, ReferencesRequest.method, params);
     return this.createResponse(result);
@@ -355,6 +294,9 @@ export class LspMcpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
+    if (!args.project_name) {
+      throw new Error('Missing required argument: project_name');
+    }
     if (!args.query) {
       throw new Error('Missing required argument: query');
     }
@@ -362,6 +304,7 @@ export class LspMcpServer {
     for (const languageId of this.lspClient.getServers()) {
       if (this.lspClient.isServerRunning(languageId)) {
         try {
+          await this.lspClient.loadProjectFiles(languageId, args.project_name);
           const params: WorkspaceSymbolParams = { query: args.query };
           const result = await this.lspClient.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
           if (result && Array.isArray(result)) {
@@ -373,62 +316,6 @@ export class LspMcpServer {
       }
     }
     return this.createResponse(results);
-  }
-
-  /**
-   * Handles start server tool requests
-   * 
-   * @private
-   * @param {StartServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStartServer(args: StartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
-    }
-    if (this.lspClient.isServerRunning(args.language_id)) {
-      return this.createResponse({ message: `Server ${args.language_id} is already running` });
-    }
-    await this.lspClient.startServer(args.language_id);
-    return this.createResponse({ message: `Server ${args.language_id} started successfully` });
-  }
-
-  /**
-   * Handles stop server tool requests
-   * 
-   * @private
-   * @param {StopServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStopServer(args: StopServerArgs): Promise<any> {
-    if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
-    }
-    if (!this.lspClient.isServerRunning(args.language_id)) {
-      return this.createResponse({ message: `Server ${args.language_id} is not running` });
-    }
-    await this.lspClient.stopServer(args.language_id);
-    return this.createResponse({ message: `Server ${args.language_id} stopped successfully` });
-  }
-
-  /**
-   * Handles restart server tool requests
-   * 
-   * @private
-   * @param {RestartServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
-    let serverName: string;
-    if (args.server_name) {
-      serverName = args.server_name;
-    } else if (args.file_path) {
-      throw new Error('File path based server detection not yet implemented');
-    } else {
-      throw new Error('Either server_name or file_path must be provided');
-    }
-    await this.lspClient.restartServer(serverName);
-    return this.createResponse({ message: `Server ${serverName} restarted successfully` });
   }
 
   /**
@@ -463,10 +350,97 @@ export class LspMcpServer {
       return {
         content: [{
           type: 'text',
-          text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) }),
-        }],
+          text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) })
+        }]
       };
     }
+  }
+
+  /**
+   * Handles restart server tool requests
+   * 
+   * @private
+   * @param {RestartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      throw new Error('Missing required argument: language_id');
+    }
+    await this.lspClient.restartServer(args.language_id);
+    return this.createResponse({ message: `Language server '${args.language_id}' restarted successfully.` });
+  }
+
+  /**
+   * Handles start server tool requests
+   * 
+   * @private
+   * @param {StartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStartServer(args: StartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      throw new Error('Missing required argument: language_id');
+    }
+    if (this.lspClient.isServerRunning(args.language_id)) {
+      return this.createResponse({ message: `Language server '${args.language_id}' is already running.` });
+    }
+    await this.lspClient.startServer(args.language_id);
+    return this.createResponse({ message: `Language server '${args.language_id}' started successfully.` });
+  }
+
+  /**
+   * Handles stop server tool requests
+   * 
+   * @private
+   * @param {StopServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStopServer(args: StopServerArgs): Promise<any> {
+    if (!args.language_id) {
+      throw new Error('Missing required argument: language_id');
+    }
+    if (!this.lspClient.isServerRunning(args.language_id)) {
+      return this.createResponse({ message: `Language server '${args.language_id}' is not running.` });
+    }
+    await this.lspClient.stopServer(args.language_id);
+    return this.createResponse({ message: `Language server '${args.language_id}' stopped successfully.` });
+  }
+
+  /**
+   * Tool definition for restarting language servers
+   * 
+   * @private
+   * @returns {Tool} Restart server tool
+   */
+  private restartServerTool(): Tool {
+    return {
+      name: 'restart_server',
+      description: 'Restart a specific language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Sets up MCP request handlers for tool execution and tool listing
+   * 
+   * @private
+   */
+  private setupHandlers(): void {
+    this.server.setRequestHandler(
+      CallToolRequestSchema,
+      this.handleRequest.bind(this)
+    );
+    this.server.setRequestHandler(
+      ListToolsRequestSchema,
+      this.handleListTools.bind(this)
+    );
   }
 
   /**
@@ -485,19 +459,43 @@ export class LspMcpServer {
   }
 
   /**
-   * Sets up MCP request handlers for tool execution and tool listing
+   * Tool definition for starting language servers
    * 
    * @private
+   * @returns {Tool} Start server tool
    */
-  private setupHandlers(): void {
-    this.server.setRequestHandler(
-      CallToolRequestSchema,
-      this.handleRequest.bind(this)
-    );
-    this.server.setRequestHandler(
-      ListToolsRequestSchema,
-      this.handleListTools.bind(this)
-    );
+  private startServerTool(): Tool {
+    return {
+      name: 'start_server',
+      description: 'Start a specific language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for stopping language servers
+   * 
+   * @private
+   * @returns {Tool} Stop server tool
+   */
+  private stopServerTool(): Tool {
+    return {
+      name: 'stop_server',
+      description: 'Stop a specific language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
+      }
+    };
   }
 
   /**
