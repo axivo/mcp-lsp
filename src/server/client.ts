@@ -139,7 +139,6 @@ export class LspClient {
     const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
     for (const [languageId, _] of this.connections) {
       const serverConfig = this.configParser.getServerConfig(languageId);
-      if (!serverConfig) continue;
       const isProjectPath = Object.values(serverConfig.projects).some(path => absolutePath.startsWith(path));
       if (isProjectPath) {
         for (const ext of serverConfig.extensions) {
@@ -163,12 +162,8 @@ export class LspClient {
     if (this.initializedProjects.has(languageId)) {
       return;
     }
-    const serverConfig = this.configParser.getServerConfig(languageId);
-    if (!serverConfig) {
-      console.warn(`No configuration found for '${languageId}' language server.`);
-      return;
-    }
     try {
+      const serverConfig = this.configParser.getServerConfig(languageId);
       const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
         name,
         uri: pathToFileURL(path).toString()
@@ -223,9 +218,6 @@ export class LspClient {
    */
   private async initializeServer(languageId: string): Promise<void> {
     const serverConfig = this.configParser.getServerConfig(languageId);
-    if (!serverConfig) {
-      throw new Error(`Unknown language: ${languageId}`);
-    }
     const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
       name,
       uri: pathToFileURL(path).toString()
@@ -478,13 +470,11 @@ export class LspClient {
       const cachedFiles = this.projectFiles.get(languageId);
       if (cachedFiles) {
         const serverConfig = this.configParser.getServerConfig(languageId);
-        if (serverConfig) {
-          for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
-            if (absolutePath.startsWith(projectPath)) {
-              const projectFiles = cachedFiles.get(projectName) || [];
-              await this.openFiles(projectFiles, languageId);
-              break;
-            }
+        for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
+          if (absolutePath.startsWith(projectPath)) {
+            const projectFiles = cachedFiles.get(projectName) || [];
+            await this.openFiles(projectFiles, languageId);
+            break;
           }
         }
       }
@@ -517,9 +507,6 @@ export class LspClient {
       return;
     }
     const serverConfig = this.configParser.getServerConfig(languageId);
-    if (!serverConfig) {
-      throw new Error(`Unknown language server: ${languageId}`);
-    }
     try {
       const projectPaths = Object.values(serverConfig.projects);
       const workspaceRoot = projectPaths.length > 0 ? projectPaths[0] : process.cwd();

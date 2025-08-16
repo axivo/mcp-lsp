@@ -118,17 +118,18 @@ export class LspConfigParser {
    * Gets server configuration for a specific language
    * 
    * @param {string} languageId - Language identifier
-   * @returns {Object | null} Server configuration or null if not found
+   * @returns {Object} Server configuration
+   * @throws {Error} When language server is not configured
    */
   getServerConfig(languageId: string): {
     command: string;
     args: string[];
     extensions: string[];
     projects: Record<string, string>;
-  } | null {
+  } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
-      return null;
+      throw new Error(`Language server '${languageId}' is not configured`);
     }
     return {
       command: serverConfig.command,
