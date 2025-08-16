@@ -69,6 +69,7 @@ export class LspClient {
   private readonly RATE_LIMIT_MAX_REQUESTS = 100;
   private readonly RATE_LIMIT_WINDOW = 60000;
   private serverStartTimes: Map<string, number> = new Map();
+  private projectFiles: Map<string, string[]> = new Map();
 
   /**
    * Creates a new LspClient instance
@@ -251,7 +252,7 @@ export class LspClient {
       return [];
     }
     try {
-      const files = await fg(`**/*.{${extensions.join(',')}}`, {
+      const files = await fg(`**/*{${extensions.join(',')}}`, {
         absolute: true,
         cwd: dir,
         ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
@@ -259,7 +260,7 @@ export class LspClient {
       });
       return files;
     } catch (error) {
-      console.warn(`Failed to find files in ${dir}:`, error);
+      console.warn(`Failed to find files in '${dir}' directory:`, error);
       return [];
     }
   }
@@ -296,10 +297,15 @@ export class LspClient {
     const serverConnection = this.connections.get(languageId)!;
     await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
+    const cachedFiles: string[] = [];
     for (const projectPath of serverConfig.projects) {
       const files = await this.findFiles(projectPath, serverConfig.extensions);
-      await this.openFiles(files, languageId);
+      if (files.length > 0) {
+        await this.openFiles([files[0]], languageId);
+        cachedFiles.push(...files);
+      }
     }
+    this.projectFiles.set(languageId, cachedFiles);
   }
 
   /**
@@ -460,13 +466,10 @@ export class LspClient {
     if (!this.isServerRunning(languageId)) {
       throw new Error(`Language server '${languageId}' is not running.`);
     }
-    // TEMPORARILY DISABLED FOR DEBUGGING
-    // if (method.startsWith('textDocument/')) {
-    //   for (const projectPath of serverConfig.projects) {
-    //     const files = await this.findFiles(projectPath, serverConfig.extensions);
-    //     await this.openFiles(files, languageId);
-    //   }
-    // }
+    if (method.startsWith('textDocument/')) {
+      const cachedFiles = this.projectFiles.get(languageId) || [];
+      await this.openFiles(cachedFiles, languageId);
+    }
     return this.sendRequest(languageId, method, params);
   }
 
@@ -536,9 +539,11 @@ export class LspClient {
       return;
     }
     this.connections.delete(languageId);
+    this.projectFiles.delete(languageId);
     this.serverStartTimes.delete(languageId);
     try {
       await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
+      await new Promise(resolve => setTimeout(resolve, 100));
       serverConnection.connection.sendNotification(ExitNotification.method, {});
       serverConnection.connection.dispose();
       if (!serverConnection.process.killed) {
