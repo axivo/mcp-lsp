@@ -23,6 +23,7 @@ import {
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { LspClient } from "./client.js";
+import { LspConfigParser } from "./config.js";
 
 interface GetServerStatusArgs {
   language_id: string;
@@ -66,7 +67,8 @@ type ToolHandler = (args: any) => Promise<any>;
  * @class LspMcpServer
  */
 export class LspMcpServer {
-  private lspClient: LspClient;
+  private client: LspClient;
+  private config: LspConfigParser;
   private server: Server;
   private toolHandlers: Map<string, ToolHandler>;
   private transport?: StdioServerTransport;
@@ -77,25 +79,15 @@ export class LspMcpServer {
    * @param {string} configPath - Path to the LSP configuration file
    */
   constructor(configPath: string) {
-    this.lspClient = new LspClient(configPath);
+    this.client = new LspClient(configPath);
+    this.config = new LspConfigParser(configPath);
     this.server = new Server(
-      { name: 'LSP MCP Server', version: this.lspClient.version() },
+      { name: 'language-server', version: this.client.version() },
       { capabilities: { tools: {} } }
     );
     this.toolHandlers = new Map<string, ToolHandler>();
     this.setupToolHandlers();
     this.setupHandlers();
-  }
-
-  /**
-   * Creates a standardized response for tool execution
-   * 
-   * @private
-   * @param {any} response - The response data from language server
-   * @returns {Object} Standardized MCP response format
-   */
-  private createResponse(response: any): any {
-    return { content: [{ type: 'text', text: JSON.stringify(response) }] };
   }
 
   /**
@@ -211,40 +203,21 @@ export class LspMcpServer {
    */
   private async handleGetServerStatus(args: GetServerStatusArgs): Promise<any> {
     if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
+      return 'Missing required argument: language_id';
     }
-    try {
-      const isServerRunning = this.lspClient.isServerRunning(args.language_id);
-      let status = 'stopped';
-      let indexingStatus = 'unknown';
-      if (isServerRunning) {
-        status = 'running';
-        try {
-          const params: WorkspaceSymbolParams = { query: 'test' };
-          await this.lspClient.sendRequest(args.language_id, WorkspaceSymbolRequest.method, params);
-          status = 'ready';
-          indexingStatus = 'indexed';
-        } catch (error) {
-          status = 'starting';
-          indexingStatus = 'indexing';
-        }
-      }
-      const serverStatus = {
-        indexingStatus,
-        language_id: args.language_id,
-        status,
-        uptime: isServerRunning ? this.lspClient.getServerUptime(args.language_id) : 0
-      };
-      return this.createResponse(serverStatus);
-    } catch (error) {
-      const errorStatus = {
-        indexingStatus: 'unknown',
-        language_id: args.language_id,
-        status: 'error',
-        error: error instanceof Error ? error.message : String(error)
-      };
-      return this.createResponse(errorStatus);
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured`;
     }
+    const isServerRunning = this.client.isServerRunning(args.language_id);
+    if (!isServerRunning) {
+      return `Language server '${args.language_id}' is stopped`;
+    }
+    const params: WorkspaceSymbolParams = { query: 'test' };
+    const result = await this.client.sendRequest(args.language_id, WorkspaceSymbolRequest.method, params);
+    if (result.content) {
+      return `Language server '${args.language_id}' is starting`;
+    }
+    return `Language server '${args.language_id}' is ready`;
   }
 
   /**
@@ -256,14 +229,14 @@ export class LspMcpServer {
    */
   private async handleGetSymbolDefinitions(args: GetSymbolArgs): Promise<any> {
     if (!args.file_path || args.character === undefined || args.line === undefined) {
-      throw new Error('Missing required arguments: character, file_path, and line');
+      return 'Missing required arguments: character, file_path, and line';
     }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.lspClient.sendServerRequest(args.file_path, DefinitionRequest.method, params);
-    return this.createResponse(result);
+    const result = await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
+    return result;
   }
 
   /**
@@ -275,15 +248,15 @@ export class LspMcpServer {
    */
   private async handleGetSymbolReferences(args: GetSymbolReferencesArgs): Promise<any> {
     if (!args.file_path || args.character === undefined || args.line === undefined) {
-      throw new Error('Missing required arguments: character, file_path, and line');
+      return 'Missing required arguments: character, file_path, and line';
     }
     const params: ReferenceParams = {
       context: { includeDeclaration: args.include_declaration ?? true },
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.lspClient.sendServerRequest(args.file_path, ReferencesRequest.method, params);
-    return this.createResponse(result);
+    const result = await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
+    return result;
   }
 
   /**
@@ -295,27 +268,23 @@ export class LspMcpServer {
    */
   private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
     if (!args.project_name) {
-      throw new Error('Missing required argument: project_name');
+      return 'Missing required argument: project_name';
     }
     if (!args.query) {
-      throw new Error('Missing required argument: query');
+      return 'Missing required argument: query';
     }
     const results: any[] = [];
-    for (const languageId of this.lspClient.getServers()) {
-      if (this.lspClient.isServerRunning(languageId)) {
-        try {
-          await this.lspClient.loadProjectFiles(languageId, args.project_name);
-          const params: WorkspaceSymbolParams = { query: args.query };
-          const result = await this.lspClient.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
-          if (result && Array.isArray(result)) {
-            results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
-          }
-        } catch (error) {
-          console.warn(`Error querying workspace symbols from '${languageId}' language server:`, error);
+    for (const languageId of this.client.getServers()) {
+      if (this.client.isServerRunning(languageId)) {
+        await this.client.loadProjectFiles(languageId, args.project_name);
+        const params: WorkspaceSymbolParams = { query: args.query };
+        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
+        if (result && Array.isArray(result)) {
+          results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
         }
       }
     }
-    return this.createResponse(results);
+    return results;
   }
 
   /**
@@ -336,24 +305,15 @@ export class LspMcpServer {
    * @returns {Promise<Object>} Response containing tool execution results
    */
   private async handleRequest(request: CallToolRequest): Promise<any> {
-    try {
-      if (!request.params.arguments) {
-        throw new Error('No arguments provided');
-      }
-      const handler = this.toolHandlers.get(request.params.name);
-      if (!handler) {
-        throw new Error(`Unknown tool: ${request.params.name}`);
-      }
-      return await handler(request.params.arguments);
-    } catch (error) {
-      console.error('Error executing tool:', error);
-      return {
-        content: [{
-          type: 'text',
-          text: JSON.stringify({ error: error instanceof Error ? error.message : String(error) })
-        }]
-      };
+    if (!request.params.arguments) {
+      return 'No arguments provided';
     }
+    const handler = this.toolHandlers.get(request.params.name);
+    if (!handler) {
+      return `Unknown tool: ${request.params.name}`;
+    }
+    const result = await handler(request.params.arguments);
+    return this.client.response(result, typeof result === 'string' ? false : true);
   }
 
   /**
@@ -365,10 +325,10 @@ export class LspMcpServer {
    */
   private async handleRestartServer(args: RestartServerArgs): Promise<any> {
     if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
+      return 'Missing required argument: language_id';
     }
-    await this.lspClient.restartServer(args.language_id);
-    return this.createResponse({ message: `Language server '${args.language_id}' restarted successfully.` });
+    await this.client.restartServer(args.language_id);
+    return `Language server '${args.language_id}' restarted successfully.`;
   }
 
   /**
@@ -380,13 +340,17 @@ export class LspMcpServer {
    */
   private async handleStartServer(args: StartServerArgs): Promise<any> {
     if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
+      return 'Missing required argument: language_id';
     }
-    if (this.lspClient.isServerRunning(args.language_id)) {
-      return this.createResponse({ message: `Language server '${args.language_id}' is already running.` });
+    if (this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is already running.`;
     }
-    await this.lspClient.startServer(args.language_id);
-    return this.createResponse({ message: `Language server '${args.language_id}' started successfully.` });
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    if (!serverConfig.command) {
+      return `Language server '${args.language_id}' is not configured`;
+    }
+    await this.client.startServer(args.language_id);
+    return `Language server '${args.language_id}' started successfully.`;
   }
 
   /**
@@ -398,13 +362,13 @@ export class LspMcpServer {
    */
   private async handleStopServer(args: StopServerArgs): Promise<any> {
     if (!args.language_id) {
-      throw new Error('Missing required argument: language_id');
+      return 'Missing required argument: language_id';
     }
-    if (!this.lspClient.isServerRunning(args.language_id)) {
-      return this.createResponse({ message: `Language server '${args.language_id}' is not running.` });
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
     }
-    await this.lspClient.stopServer(args.language_id);
-    return this.createResponse({ message: `Language server '${args.language_id}' stopped successfully.` });
+    await this.client.stopServer(args.language_id);
+    return `Language server '${args.language_id}' stopped successfully.`;
   }
 
   /**
@@ -506,9 +470,7 @@ export class LspMcpServer {
    */
   async connect(transport: StdioServerTransport): Promise<void> {
     this.transport = transport;
-    transport.onerror = (error: Error) => {
-      console.error('Transport error:', error.message);
-    };
+    transport.onerror = () => { };
     await this.server.connect(transport);
   }
 }

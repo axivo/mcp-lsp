@@ -45,22 +45,18 @@ export class LspConfigParser {
    * @private
    * @param {string} configPath - Path to the configuration file
    * @returns {Config} Parsed and validated configuration
-   * @throws {Error} When file cannot be read or parsed
    */
   private loadConfig(configPath: string): Config {
+    const emptyConfig = { servers: {} };
     try {
       const configContent = readFileSync(configPath, 'utf8');
       const config = JSON.parse(configContent);
-      this.validateConfig(config);
+      if (!this.validateConfig(config)) {
+        return emptyConfig;
+      }
       return config;
     } catch (error) {
-      if ((error as any).code === 'ENOENT') {
-        throw new Error(`LSP configuration file not found: ${configPath}`);
-      }
-      if (error instanceof SyntaxError) {
-        throw new Error(`Invalid JSON in LSP configuration file: ${error.message}`);
-      }
-      throw new Error(`Failed to read LSP configuration file: ${error}`);
+      return emptyConfig;
     }
   }
 
@@ -69,40 +65,44 @@ export class LspConfigParser {
    * 
    * @private
    * @param {Config} config - Configuration to validate
-   * @throws {Error} When configuration is invalid
+   * @returns {boolean} True if configuration is valid, false otherwise
    */
-  private validateConfig(config: Config): void {
+  private validateConfig(config: Config): boolean {
     if (!config || typeof config !== 'object') {
-      throw new Error('Configuration must be a valid object');
+      return false;
     }
     if (!config.servers || typeof config.servers !== 'object') {
-      throw new Error("Configuration must have a 'servers' object");
+      return false;
     }
     if (Object.keys(config.servers).length === 0) {
-      throw new Error('Configuration must define at least one language server');
+      return false;
     }
-    for (const [languageId, serverConfig] of Object.entries(config.servers)) {
+    for (const serverConfig of Object.values(config.servers)) {
       if (!serverConfig || typeof serverConfig !== 'object') {
-        throw new Error(`Language server '${languageId}' configuration must be an object`);
+        return false;
       }
       if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
-        throw new Error(`Language server '${languageId}' must have a valid command string`);
+        return false;
       }
       if (!Array.isArray(serverConfig.args)) {
-        throw new Error(`Language server '${languageId}' args must be an array`);
+        return false;
       }
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
-        throw new Error(`Language server '${languageId}' must have at least one extension`);
+        return false;
       }
       if (!serverConfig.projects || typeof serverConfig.projects !== 'object' || Object.keys(serverConfig.projects).length === 0) {
-        throw new Error(`Language server '${languageId}' must have at least one project in the projects object`);
+        return false;
       }
       for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
+        if (typeof projectName !== 'string' || projectName.trim() === '') {
+          return false;
+        }
         if (typeof projectPath !== 'string' || projectPath.trim() === '') {
-          throw new Error(`Language server '${languageId}' project '${projectName}' must have a valid path string`);
+          return false;
         }
       }
     }
+    return true;
   }
 
   /**
@@ -119,7 +119,6 @@ export class LspConfigParser {
    * 
    * @param {string} languageId - Language identifier
    * @returns {Object} Server configuration
-   * @throws {Error} When language server is not configured
    */
   getServerConfig(languageId: string): {
     command: string;
@@ -129,7 +128,12 @@ export class LspConfigParser {
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
-      throw new Error(`Language server '${languageId}' is not configured`);
+      return {
+        command: '',
+        args: [],
+        extensions: [],
+        projects: {}
+      };
     }
     return {
       command: serverConfig.command,

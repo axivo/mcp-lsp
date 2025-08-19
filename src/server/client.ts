@@ -20,12 +20,14 @@ import {
 } from 'vscode-jsonrpc/node.js';
 import {
   ClientCapabilities,
+  DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
   ExitNotification,
   InitializedNotification,
   InitializeParams,
   InitializeRequest,
+  ReferencesRequest,
   ShutdownRequest,
   TextDocumentItem,
   WorkspaceFolder,
@@ -62,7 +64,7 @@ interface ServerConnection {
  * @class LspClient
  */
 export class LspClient {
-  private configParser: LspConfigParser;
+  private config: LspConfigParser;
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
   private rateLimiter: Map<string, number> = new Map();
@@ -77,7 +79,7 @@ export class LspClient {
    * @param {string} configPath - Path to the language server configuration file
    */
   constructor(configPath: string) {
-    this.configParser = new LspConfigParser(configPath);
+    this.config = new LspConfigParser(configPath);
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -95,7 +97,7 @@ export class LspClient {
     const key = `${languageId}_${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
     const current = this.rateLimiter.get(key) || 0;
     if (current >= this.RATE_LIMIT_MAX_REQUESTS) {
-      throw new Error(`Rate limit exceeded for '${languageId}' language server`);
+      return this.response(`Rate limit exceeded for '${languageId}' language server.`);
     }
     this.rateLimiter.set(key, current + 1);
     for (const [k, _] of this.rateLimiter) {
@@ -118,9 +120,7 @@ export class LspClient {
       new StreamMessageReader(process.stdout!),
       new StreamMessageWriter(process.stdin!)
     );
-    connection.onError((error) => {
-      console.error('Connection error:', error);
-    });
+    connection.onError(() => { });
     connection.listen();
     return connection;
   }
@@ -132,13 +132,13 @@ export class LspClient {
    * @param {string} filePath - Path to the file
    * @returns {string} Language identifier of the running server that handles the file
    */
-  private getServerInfo(filePath: string): string {
+  private getServerInfo(filePath: string): string | null {
     if (this.connections.size === 0) {
-      throw new Error('No language servers are currently running.');
+      return null;
     }
     const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
     for (const [languageId, _] of this.connections) {
-      const serverConfig = this.configParser.getServerConfig(languageId);
+      const serverConfig = this.config.getServerConfig(languageId);
       const isProjectPath = Object.values(serverConfig.projects).some(path => absolutePath.startsWith(path));
       if (isProjectPath) {
         for (const ext of serverConfig.extensions) {
@@ -148,7 +148,7 @@ export class LspClient {
         }
       }
     }
-    throw new Error(`File '${filePath}' does not belong to running language server`);
+    return null;
   }
 
   /**
@@ -162,25 +162,20 @@ export class LspClient {
     if (this.initializedProjects.has(languageId)) {
       return;
     }
-    try {
-      const serverConfig = this.configParser.getServerConfig(languageId);
-      const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
-        name,
-        uri: pathToFileURL(path).toString()
-      }));
-      if (workspaceFolders.length > 0) {
-        this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
-          event: {
-            added: workspaceFolders,
-            removed: []
-          }
-        });
-      }
-      this.initializedProjects.add(languageId);
-    } catch (error) {
-      console.error(`Failed to initialize projects for '${languageId}' language server:`, error);
-      this.initializedProjects.add(languageId);
+    const serverConfig = this.config.getServerConfig(languageId);
+    const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
+      name,
+      uri: pathToFileURL(path).toString()
+    }));
+    if (workspaceFolders.length > 0) {
+      this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
+        event: {
+          added: workspaceFolders,
+          removed: []
+        }
+      });
     }
+    this.initializedProjects.add(languageId);
   }
 
   /**
@@ -195,18 +190,13 @@ export class LspClient {
     if (extensions.length === 0) {
       return [];
     }
-    try {
-      const files = await fg(`**/*{${extensions.join(',')}}`, {
-        absolute: true,
-        cwd: dir,
-        ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
-        onlyFiles: true
-      });
-      return files;
-    } catch (error) {
-      console.warn(`Failed to find files in '${dir}' directory:`, error);
-      return [];
-    }
+    const files = await fg(`**/*{${extensions.join(',')}}`, {
+      absolute: true,
+      cwd: dir,
+      ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
+      onlyFiles: true
+    });
+    return files;
   }
 
   /**
@@ -217,7 +207,7 @@ export class LspClient {
    * @returns {Promise<void>} Promise that resolves when initialized
    */
   private async initializeServer(languageId: string): Promise<void> {
-    const serverConfig = this.configParser.getServerConfig(languageId);
+    const serverConfig = this.config.getServerConfig(languageId);
     const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
       name,
       uri: pathToFileURL(path).toString()
@@ -263,21 +253,17 @@ export class LspClient {
       return;
     }
     const open = files.map(async (file) => {
-      try {
-        const uri = pathToFileURL(file).toString();
-        const text = readFileSync(file, 'utf8');
-        const textDocument: TextDocumentItem = {
-          uri,
-          languageId,
-          version: 1,
-          text
-        };
-        this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
-      } catch (error) {
-        console.warn(`Failed to open '${file}' file:`, error);
-      }
+      const uri = pathToFileURL(file).toString();
+      const text = readFileSync(file, 'utf8');
+      const textDocument: TextDocumentItem = {
+        uri,
+        languageId,
+        version: 1,
+        text
+      };
+      this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
     });
-    await Promise.all(open);
+    await Promise.allSettled(open);
   }
 
   /**
@@ -337,8 +323,7 @@ export class LspClient {
    * @param {ChildProcess} process - Language server process
    */
   private setProcessHandlers(languageId: string, process: ChildProcess): void {
-    process.on('error', (error) => {
-      console.error(`Language server '${languageId}' error:`, error);
+    process.on('error', () => {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
@@ -365,7 +350,7 @@ export class LspClient {
    * @returns {string[]} Array of servers
    */
   getServers(): string[] {
-    return this.configParser.getServers();
+    return this.config.getServers();
   }
 
   /**
@@ -394,14 +379,26 @@ export class LspClient {
   }
 
   /**
+   * Creates a standardized response for tool execution
+   * 
+   * @param {any} response - The response data from language server
+   * @param {boolean} stringify - Whether to JSON stringify the response (default: false)
+   * @returns {Object} Standardized response format
+   */
+  response(response: any, stringify: boolean = false): any {
+    const text = stringify ? JSON.stringify(response) : response;
+    return { content: [{ type: 'text', text }] };
+  }
+
+  /**
    * Restarts a specific language server
    * 
    * @param {string} languageId - Language identifier
    * @returns {Promise<void>} Promise that resolves when server is restarted
    */
   async restartServer(languageId: string): Promise<void> {
-    if (!this.configParser.hasServerConfig(languageId)) {
-      throw new Error(`Unknown language: ${languageId}`);
+    if (!this.config.hasServerConfig(languageId)) {
+      return this.response(`Language server '${languageId}' is unknown.`);
     }
     await this.stopServer(languageId);
     this.initializedProjects.delete(languageId);
@@ -418,7 +415,6 @@ export class LspClient {
   sendNotification(languageId: string, method: string, params: any): void {
     const serverConnection = this.connections.get(languageId);
     if (!serverConnection || !serverConnection.process.stdin) {
-      console.warn(`Cannot send notification to ${languageId}: server not running`);
       return;
     }
     serverConnection.connection.sendNotification(method, params);
@@ -435,20 +431,20 @@ export class LspClient {
   async sendRequest(languageId: string, method: string, params: any): Promise<any> {
     this.checkRateLimit(languageId);
     if (!this.isServerRunning(languageId)) {
-      throw new Error(`Language server '${languageId}' is not running.`);
+      return this.response(`Language server '${languageId}' is not running.`);
     }
     if (method === WorkspaceSymbolRequest.method) {
       await this.initializeProjects(languageId);
     }
     const serverConnection = this.connections.get(languageId);
     if (!serverConnection || !serverConnection.process.stdin) {
-      throw new Error(`Language server '${languageId}' is not running.`);
+      return this.response(`Language server '${languageId}' is not running.`);
     }
     try {
       const result = await serverConnection.connection.sendRequest(method, params);
       return result;
     } catch (error) {
-      throw new Error(`Request failed for '${method}': ${error}`);
+      return this.response(`Request failed for '${method}': ${error}`);
     }
   }
 
@@ -462,14 +458,24 @@ export class LspClient {
    */
   async sendServerRequest(file: string, method: string, params: any): Promise<any> {
     const languageId = this.getServerInfo(file);
-    if (!this.isServerRunning(languageId)) {
-      throw new Error(`Language server '${languageId}' is not running.`);
+    if (!languageId) {
+      if (this.connections.size === 0) {
+        return 'No language servers are currently running.';
+      }
+      return `File '${file}' does not belong to running language server.`;
     }
-    if (method.startsWith('textDocument/')) {
+    if (!this.isServerRunning(languageId)) {
+      return `Language server '${languageId}' is not running.`;
+    }
+    const textDocumentMethods: string[] = [
+      DefinitionRequest.method,
+      ReferencesRequest.method
+    ];
+    if (textDocumentMethods.includes(method)) {
       const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);
       const cachedFiles = this.projectFiles.get(languageId);
       if (cachedFiles) {
-        const serverConfig = this.configParser.getServerConfig(languageId);
+        const serverConfig = this.config.getServerConfig(languageId);
         for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
           if (absolutePath.startsWith(projectPath)) {
             const projectFiles = cachedFiles.get(projectName) || [];
@@ -489,11 +495,9 @@ export class LspClient {
    */
   async shutdown(): Promise<void> {
     const shutdownPromises = Array.from(this.connections.keys()).map(languageId =>
-      this.stopServer(languageId).catch(error =>
-        console.warn(`Error stopping server ${languageId}:`, error)
-      )
+      this.stopServer(languageId)
     );
-    await Promise.all(shutdownPromises);
+    await Promise.allSettled(shutdownPromises);
   }
 
   /**
@@ -506,7 +510,7 @@ export class LspClient {
     if (this.connections.has(languageId)) {
       return;
     }
-    const serverConfig = this.configParser.getServerConfig(languageId);
+    const serverConfig = this.config.getServerConfig(languageId);
     try {
       const projectPaths = Object.values(serverConfig.projects);
       const workspaceRoot = projectPaths.length > 0 ? projectPaths[0] : process.cwd();
@@ -516,7 +520,7 @@ export class LspClient {
         stdio: ['pipe', 'pipe', 'pipe']
       });
       if (!childProcess.stdout || !childProcess.stdin || !childProcess.stderr) {
-        throw new Error(`Failed to create stdio pipes for '${languageId}' language server`);
+        return this.response(`Failed to create stdio pipes for '${languageId}' language server`);
       }
       const connection = this.createConnection(childProcess);
       const serverConnection: ServerConnection = {
@@ -530,7 +534,7 @@ export class LspClient {
       await this.initializeServer(languageId);
       serverConnection.initialized = true;
     } catch (error) {
-      throw new Error(`Failed to start '${languageId}' language server: ${error}`);
+      return this.response(`Failed to start '${languageId}' language server: ${error}`);
     }
   }
 
@@ -563,9 +567,10 @@ export class LspClient {
           serverConnection.process.on('exit', handleExit);
         });
       }
-    } catch (error) {
-      console.warn(`Error stopping '${languageId}' language server:`, error);
-      serverConnection.process.kill('SIGKILL');
+    } finally {
+      if (!serverConnection.process.killed) {
+        serverConnection.process.kill('SIGKILL');
+      }
     }
   }
 
@@ -583,7 +588,7 @@ export class LspClient {
       const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
       return packageJson.version;
     } catch (error) {
-      throw new Error(`Failed to read package.json version: ${error}`);
+      return this.response(`Failed to read package.json version: ${error}`);
     }
   }
 }
