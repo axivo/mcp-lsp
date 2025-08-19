@@ -42,7 +42,7 @@ interface GetSymbolReferencesArgs {
   include_declaration?: boolean;
 }
 
-interface GetWorkspaceSymbolsArgs {
+interface GetSymbolsArgs {
   project_name: string;
   query: string;
 }
@@ -101,7 +101,7 @@ export class LspMcpServer {
       this.getServerStatusTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
-      this.getWorkspaceSymbolsTool(),
+      this.getSymbolsTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
@@ -179,9 +179,9 @@ export class LspMcpServer {
    * @private
    * @returns {Tool} Workspace symbols tool
    */
-  private getWorkspaceSymbolsTool(): Tool {
+  private getSymbolsTool(): Tool {
     return {
-      name: 'get_workspace_symbols',
+      name: 'get_symbols',
       description: 'Get symbols across entire workspace',
       inputSchema: {
         type: 'object',
@@ -263,10 +263,10 @@ export class LspMcpServer {
    * Handles workspace symbols tool requests
    * 
    * @private
-   * @param {GetWorkspaceSymbolsArgs} args - Tool arguments
+   * @param {GetSymbolsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
+  private async handleGetSymbols(args: GetSymbolsArgs): Promise<any> {
     if (!args.project_name) {
       return 'Missing required argument: project_name';
     }
@@ -416,7 +416,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
-    this.toolHandlers.set('get_workspace_symbols', this.handleGetWorkspaceSymbols.bind(this));
+    this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
