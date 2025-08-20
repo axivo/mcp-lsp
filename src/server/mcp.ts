@@ -15,7 +15,9 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
+  CompletionRequest,
   DefinitionRequest,
+  HoverRequest,
   ReferenceParams,
   ReferencesRequest,
   TextDocumentPositionParams,
@@ -27,6 +29,18 @@ import { LspConfigParser } from "./config.js";
 
 interface GetServerStatusArgs {
   language_id: string;
+}
+
+interface GetCompletionsArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
+
+interface GetHoverArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface GetSymbolArgs {
@@ -102,6 +116,8 @@ export class LspMcpServer {
    */
   private getLspTools(): Tool[] {
     return [
+      this.getCompletionsTool(),
+      this.getHoverTool(),
       this.getServerStatusTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
@@ -111,6 +127,50 @@ export class LspMcpServer {
       this.startServerTool(),
       this.stopServerTool()
     ];
+  }
+
+  /**
+   * Tool definition for getting code completions
+   * 
+   * @private
+   * @returns {Tool} Code completions tool
+   */
+  private getCompletionsTool(): Tool {
+    return {
+      name: 'get_completions',
+      description: 'Get code completion suggestions at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting hover information
+   * 
+   * @private
+   * @returns {Tool} Hover information tool
+   */
+  private getHoverTool(): Tool {
+    return {
+      name: 'get_hover',
+      description: 'Get hover information and documentation at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
   }
 
   /**
@@ -217,6 +277,44 @@ export class LspMcpServer {
         required: ['language_id']
       }
     };
+  }
+
+  /**
+   * Handles get completions tool requests
+   * 
+   * @private
+   * @param {GetCompletionsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetCompletions(args: GetCompletionsArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get hover tool requests
+   * 
+   * @private
+   * @param {GetHoverArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetHover(args: GetHoverArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
+    return result;
   }
 
   /**
@@ -464,6 +562,8 @@ export class LspMcpServer {
    * @private
    */
   private setupToolHandlers(): void {
+    this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
+    this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));

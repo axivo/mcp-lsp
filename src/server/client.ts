@@ -20,10 +20,12 @@ import {
 } from 'vscode-jsonrpc/node.js';
 import {
   ClientCapabilities,
+  CompletionRequest,
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
   ExitNotification,
+  HoverRequest,
   InitializedNotification,
   InitializeParams,
   InitializeRequest,
@@ -468,7 +470,9 @@ export class LspClient {
       return `Language server '${languageId}' is not running.`;
     }
     const textDocumentMethods: string[] = [
+      CompletionRequest.method,
       DefinitionRequest.method,
+      HoverRequest.method,
       ReferencesRequest.method
     ];
     if (textDocumentMethods.includes(method)) {
