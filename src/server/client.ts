@@ -37,6 +37,7 @@ import {
   InitializeParams,
   InitializeRequest,
   ReferencesRequest,
+  RenameRequest,
   ShutdownRequest,
   SignatureHelpRequest,
   TextDocumentItem,
@@ -491,6 +492,7 @@ export class LspClient {
       HoverRequest.method,
       ImplementationRequest.method,
       ReferencesRequest.method,
+      RenameRequest.method,
       SignatureHelpRequest.method,
       TypeDefinitionRequest.method
     ];

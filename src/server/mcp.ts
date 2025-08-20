@@ -28,6 +28,8 @@ import {
   ImplementationRequest,
   ReferenceParams,
   ReferencesRequest,
+  RenameParams,
+  RenameRequest,
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
@@ -112,6 +114,13 @@ interface GetSymbolReferencesArgs {
   include_declaration?: boolean;
 }
 
+interface GetSymbolRenamesArgs {
+  character: number;
+  file_path: string;
+  line: number;
+  new_name: string;
+}
+
 interface GetSymbolsArgs {
   project_name: string;
   query: string;
@@ -188,6 +197,7 @@ export class LspMcpServer {
       this.getSignatureHelpTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
+      this.getSymbolRenamesTool(),
       this.getSymbolsTool(),
       this.getTypeDefinitionsTool(),
       this.restartServerTool(),
@@ -491,6 +501,29 @@ export class LspMcpServer {
           include_declaration: { type: 'boolean', description: 'Include declaration in results', default: true }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting symbol renames
+   * 
+   * @private
+   * @returns {Tool} Symbol renames tool
+   */
+  private getSymbolRenamesTool(): Tool {
+    return {
+      name: 'get_symbol_renames',
+      description: 'Get workspace-wide symbol rename suggestions',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          new_name: { type: 'string', description: 'New name for the symbol' }
+        },
+        required: ['character', 'file_path', 'line', 'new_name']
       }
     };
   }
@@ -842,6 +875,26 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get symbol renames tool requests
+   * 
+   * @private
+   * @param {GetSymbolRenamesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSymbolRenames(args: GetSymbolRenamesArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined || !args.new_name) {
+      return 'Missing required arguments: character, file_path, line, and new_name';
+    }
+    const params: RenameParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` },
+      newName: args.new_name
+    };
+    const result = await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles symbol search tool requests
    * 
    * @private
@@ -1028,6 +1081,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
+    this.toolHandlers.set('get_symbol_renames', this.handleGetSymbolRenames.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
