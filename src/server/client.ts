@@ -34,6 +34,7 @@ import {
   ReferencesRequest,
   ShutdownRequest,
   TextDocumentItem,
+  TypeDefinitionRequest,
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -299,7 +300,6 @@ export class LspClient {
       },
       textDocument: {
         codeAction: { dynamicRegistration: false },
-        codeLens: { dynamicRegistration: false },
         completion: { dynamicRegistration: false },
         definition: { dynamicRegistration: false },
         documentHighlight: { dynamicRegistration: false },
@@ -477,7 +477,8 @@ export class LspClient {
       DefinitionRequest.method,
       DocumentSymbolRequest.method,
       HoverRequest.method,
-      ReferencesRequest.method
+      ReferencesRequest.method,
+      TypeDefinitionRequest.method
     ];
     if (methods.includes(method)) {
       const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);

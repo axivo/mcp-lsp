@@ -24,6 +24,7 @@ import {
   ReferenceParams,
   ReferencesRequest,
   TextDocumentPositionParams,
+  TypeDefinitionRequest,
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -76,6 +77,12 @@ interface GetSymbolReferencesArgs {
 interface GetSymbolsArgs {
   project_name: string;
   query: string;
+}
+
+interface GetTypeDefinitionsArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface RestartServerArgs {
@@ -138,6 +145,7 @@ export class LspMcpServer {
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getSymbolsTool(),
+      this.getTypeDefinitionsTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
@@ -332,6 +340,28 @@ export class LspMcpServer {
           query: { type: 'string', description: 'Symbol search query' }
         },
         required: ['project_name', 'query']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting type definitions
+   * 
+   * @private
+   * @returns {Tool} Type definitions tool
+   */
+  private getTypeDefinitionsTool(): Tool {
+    return {
+      name: 'get_type_definitions',
+      description: 'Get all type definition locations',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
     };
   }
@@ -537,6 +567,25 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get type definitions tool requests
+   * 
+   * @private
+   * @param {GetTypeDefinitionsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetTypeDefinitions(args: GetTypeDefinitionsArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles tool listing requests from MCP clients
    * 
    * @private
@@ -671,6 +720,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
+    this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
