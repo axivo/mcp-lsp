@@ -19,6 +19,7 @@ import {
   CodeActionRequest,
   CompletionRequest,
   DefinitionRequest,
+  DocumentLinkRequest,
   DocumentSymbolRequest,
   HoverRequest,
   ImplementationRequest,
@@ -43,6 +44,10 @@ interface GetCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetDocumentLinksArgs {
+  file_path: string;
 }
 
 interface GetDocumentSymbolsArgs {
@@ -152,6 +157,7 @@ export class LspMcpServer {
     return [
       this.getCodeActionsTool(),
       this.getCompletionsTool(),
+      this.getDocumentLinksTool(),
       this.getDocumentSymbolsTool(),
       this.getHoverTool(),
       this.getImplementationsTool(),
@@ -208,6 +214,26 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document links
+   * 
+   * @private
+   * @returns {Tool} Document links tool
+   */
+  private getDocumentLinksTool(): Tool {
+    return {
+      name: 'get_document_links',
+      description: 'Get document links and references',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
       }
     };
   }
@@ -465,6 +491,26 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get document links tool requests
+   * 
+   * @private
+   * @param {GetDocumentLinksArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentLinks(args: GetDocumentLinksArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: {
+        uri: `file://${args.file_path}`
+      }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
     return result;
   }
 
@@ -811,6 +857,7 @@ export class LspMcpServer {
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
+    this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
