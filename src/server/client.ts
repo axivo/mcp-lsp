@@ -33,6 +33,7 @@ import {
   InitializeRequest,
   ReferencesRequest,
   ShutdownRequest,
+  SignatureHelpRequest,
   TextDocumentItem,
   TypeDefinitionRequest,
   WorkspaceFolder,
@@ -478,6 +479,7 @@ export class LspClient {
       DocumentSymbolRequest.method,
       HoverRequest.method,
       ReferencesRequest.method,
+      SignatureHelpRequest.method,
       TypeDefinitionRequest.method
     ];
     if (methods.includes(method)) {

@@ -23,6 +23,7 @@ import {
   HoverRequest,
   ReferenceParams,
   ReferencesRequest,
+  SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
   WorkspaceSymbolParams,
@@ -59,6 +60,12 @@ interface GetServerProjectsArgs {
 
 interface GetServerStatusArgs {
   language_id: string;
+}
+
+interface GetSignatureHelpArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface GetSymbolArgs {
@@ -142,6 +149,7 @@ export class LspMcpServer {
       this.getHoverTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
+      this.getSignatureHelpTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getSymbolsTool(),
@@ -274,6 +282,28 @@ export class LspMcpServer {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
         },
         required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting signature help
+   * 
+   * @private
+   * @returns {Tool} Signature help tool
+   */
+  private getSignatureHelpTool(): Tool {
+    return {
+      name: 'get_signature_help',
+      description: 'Get function signature help and parameter information at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
     };
   }
@@ -500,6 +530,25 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get signature help tool requests
+   * 
+   * @private
+   * @param {GetSignatureHelpArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSignatureHelp(args: GetSignatureHelpArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get symbol definitions tool requests
    * 
    * @private
@@ -717,6 +766,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
+    this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
