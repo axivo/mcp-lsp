@@ -20,6 +20,7 @@ import {
 } from 'vscode-jsonrpc/node.js';
 import {
   ClientCapabilities,
+  CodeActionRequest,
   CompletionRequest,
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
@@ -471,6 +472,7 @@ export class LspClient {
       return `Language server '${languageId}' is not running.`;
     }
     const methods: string[] = [
+      CodeActionRequest.method,
       CompletionRequest.method,
       DefinitionRequest.method,
       DocumentSymbolRequest.method,

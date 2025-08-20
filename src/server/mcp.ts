@@ -15,6 +15,8 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
+  CodeActionParams,
+  CodeActionRequest,
   CompletionRequest,
   DefinitionRequest,
   DocumentSymbolRequest,
@@ -28,8 +30,10 @@ import {
 import { LspClient } from "./client.js";
 import { LspConfigParser } from "./config.js";
 
-interface GetServerStatusArgs {
-  language_id: string;
+interface GetCodeActionsArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface GetCompletionsArgs {
@@ -48,6 +52,14 @@ interface GetHoverArgs {
   line: number;
 }
 
+interface GetServerProjectsArgs {
+  language_id: string;
+}
+
+interface GetServerStatusArgs {
+  language_id: string;
+}
+
 interface GetSymbolArgs {
   character: number;
   file_path: string;
@@ -64,10 +76,6 @@ interface GetSymbolReferencesArgs {
 interface GetSymbolsArgs {
   project_name: string;
   query: string;
-}
-
-interface ListProjectsArgs {
-  language_id: string;
 }
 
 interface RestartServerArgs {
@@ -121,18 +129,41 @@ export class LspMcpServer {
    */
   private getLspTools(): Tool[] {
     return [
+      this.getCodeActionsTool(),
       this.getCompletionsTool(),
       this.getDocumentSymbolsTool(),
       this.getHoverTool(),
+      this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getSymbolsTool(),
-      this.listProjectsTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
     ];
+  }
+
+  /**
+   * Tool definition for getting code actions
+   * 
+   * @private
+   * @returns {Tool} Code actions tool
+   */
+  private getCodeActionsTool(): Tool {
+    return {
+      name: 'get_code_actions',
+      description: 'Get quick fixes and refactoring suggestions at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
   }
 
   /**
@@ -195,6 +226,26 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting server projects
+   * 
+   * @private
+   * @returns {Tool} Server projects tool
+   */
+  private getServerProjectsTool(): Tool {
+    return {
+      name: 'get_server_projects',
+      description: 'Get available projects for a specific language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
       }
     };
   }
@@ -286,23 +337,26 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for listing projects for a language server
+   * Handles get code actions tool requests
    * 
    * @private
-   * @returns {Tool} List projects tool
+   * @param {GetCodeActionsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
    */
-  private listProjectsTool(): Tool {
-    return {
-      name: 'list_projects',
-      description: 'List available projects for a specific language server',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
-        },
-        required: ['language_id']
-      }
+  private async handleGetCodeActions(args: GetCodeActionsArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: CodeActionParams = {
+      context: { diagnostics: [] },
+      range: {
+        start: { character: args.character, line: args.line },
+        end: { character: args.character, line: args.line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
     };
+    const result = await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
+    return result;
   }
 
   /**
@@ -361,6 +415,32 @@ export class LspMcpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
     return result;
+  }
+
+  /**
+   * Handles get server projects tool requests
+   * 
+   * @private
+   * @param {GetServerProjectsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetServerProjects(args: GetServerProjectsArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured`;
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projects = Object.entries(serverConfig.projects).map(([name, path]) => ({
+      project_name: name,
+      path: path,
+      extensions: serverConfig.extensions
+    }));
+    return projects;
   }
 
   /**
@@ -426,32 +506,6 @@ export class LspMcpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
     return result;
-  }
-
-  /**
-   * Handles list projects tool requests
-   * 
-   * @private
-   * @param {ListProjectsArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleListProjects(args: ListProjectsArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projects = Object.entries(serverConfig.projects).map(([name, path]) => ({
-      project_name: name,
-      path: path,
-      extensions: serverConfig.extensions
-    }));
-    return projects;
   }
 
   /**
@@ -608,14 +662,15 @@ export class LspMcpServer {
    * @private
    */
   private setupToolHandlers(): void {
+    this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
+    this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
-    this.toolHandlers.set('list_projects', this.handleListProjects.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
