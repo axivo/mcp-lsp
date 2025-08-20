@@ -21,6 +21,7 @@ import {
   DefinitionRequest,
   DocumentSymbolRequest,
   HoverRequest,
+  ImplementationRequest,
   ReferenceParams,
   ReferencesRequest,
   SignatureHelpRequest,
@@ -49,6 +50,12 @@ interface GetDocumentSymbolsArgs {
 }
 
 interface GetHoverArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
+
+interface GetImplementationsArgs {
   character: number;
   file_path: string;
   line: number;
@@ -147,6 +154,7 @@ export class LspMcpServer {
       this.getCompletionsTool(),
       this.getDocumentSymbolsTool(),
       this.getHoverTool(),
+      this.getImplementationsTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSignatureHelpTool(),
@@ -234,6 +242,28 @@ export class LspMcpServer {
     return {
       name: 'get_hover',
       description: 'Get hover information and documentation at a specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting implementations
+   * 
+   * @private
+   * @returns {Tool} Implementations tool
+   */
+  private getImplementationsTool(): Tool {
+    return {
+      name: 'get_implementations',
+      description: 'Get all implementation locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -474,6 +504,25 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get implementations tool requests
+   * 
+   * @private
+   * @param {GetImplementationsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetImplementations(args: GetImplementationsArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
     return result;
   }
 
@@ -764,6 +813,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
+    this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));

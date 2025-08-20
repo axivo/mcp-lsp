@@ -28,6 +28,7 @@ import {
   DocumentSymbolRequest,
   ExitNotification,
   HoverRequest,
+  ImplementationRequest,
   InitializedNotification,
   InitializeParams,
   InitializeRequest,
@@ -478,6 +479,7 @@ export class LspClient {
       DefinitionRequest.method,
       DocumentSymbolRequest.method,
       HoverRequest.method,
+      ImplementationRequest.method,
       ReferencesRequest.method,
       SignatureHelpRequest.method,
       TypeDefinitionRequest.method
