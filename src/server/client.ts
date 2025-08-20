@@ -24,6 +24,7 @@ import {
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
+  DocumentSymbolRequest,
   ExitNotification,
   HoverRequest,
   InitializedNotification,
@@ -469,13 +470,14 @@ export class LspClient {
     if (!this.isServerRunning(languageId)) {
       return `Language server '${languageId}' is not running.`;
     }
-    const textDocumentMethods: string[] = [
+    const methods: string[] = [
       CompletionRequest.method,
       DefinitionRequest.method,
+      DocumentSymbolRequest.method,
       HoverRequest.method,
       ReferencesRequest.method
     ];
-    if (textDocumentMethods.includes(method)) {
+    if (methods.includes(method)) {
       const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);
       const cachedFiles = this.projectFiles.get(languageId);
       if (cachedFiles) {

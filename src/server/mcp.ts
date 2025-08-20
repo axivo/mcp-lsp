@@ -17,6 +17,7 @@ import {
 import {
   CompletionRequest,
   DefinitionRequest,
+  DocumentSymbolRequest,
   HoverRequest,
   ReferenceParams,
   ReferencesRequest,
@@ -35,6 +36,10 @@ interface GetCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetDocumentSymbolsArgs {
+  file_path: string;
 }
 
 interface GetHoverArgs {
@@ -117,6 +122,7 @@ export class LspMcpServer {
   private getLspTools(): Tool[] {
     return [
       this.getCompletionsTool(),
+      this.getDocumentSymbolsTool(),
       this.getHoverTool(),
       this.getServerStatusTool(),
       this.getSymbolDefinitionsTool(),
@@ -147,6 +153,26 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document symbols
+   * 
+   * @private
+   * @returns {Tool} Document symbols tool
+   */
+  private getDocumentSymbolsTool(): Tool {
+    return {
+      name: 'get_document_symbols',
+      description: 'Get symbols across entire document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
       }
     };
   }
@@ -295,6 +321,26 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get document symbols tool requests
+   * 
+   * @private
+   * @param {GetDocumentSymbolsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentSymbols(args: GetDocumentSymbolsArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: {
+        uri: `file://${args.file_path}`
+      }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
     return result;
   }
 
@@ -563,6 +609,7 @@ export class LspMcpServer {
    */
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
+    this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
