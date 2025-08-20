@@ -43,7 +43,7 @@ interface GetCodeActionsArgs {
   line: number;
 }
 
-interface GetCompletionsArgs {
+interface GetCodeCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
@@ -99,7 +99,7 @@ interface GetSignatureHelpArgs {
   line: number;
 }
 
-interface GetSymbolArgs {
+interface GetSymbolDefinitionsArgs {
   character: number;
   file_path: string;
   line: number;
@@ -175,7 +175,7 @@ export class LspMcpServer {
   private getLspTools(): Tool[] {
     return [
       this.getCodeActionsTool(),
-      this.getCompletionsTool(),
+      this.getCodeCompletionsTool(),
       this.getDocumentFormatTool(),
       this.getDocumentLinksTool(),
       this.getDocumentRangeFormatTool(),
@@ -224,9 +224,9 @@ export class LspMcpServer {
    * @private
    * @returns {Tool} Code completions tool
    */
-  private getCompletionsTool(): Tool {
+  private getCodeCompletionsTool(): Tool {
     return {
-      name: 'get_completions',
+      name: 'get_code_completions',
       description: 'Get code completion suggestions at a specific position',
       inputSchema: {
         type: 'object',
@@ -451,7 +451,7 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for getting symbol definition locations
+   * Tool definition for getting symbol definitions
    * 
    * @private
    * @returns {Tool} Symbol definitions tool
@@ -459,7 +459,7 @@ export class LspMcpServer {
   private getSymbolDefinitionsTool(): Tool {
     return {
       name: 'get_symbol_definitions',
-      description: 'Get all symbol definition locations',
+      description: 'Get all workspace symbol definition locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -481,7 +481,7 @@ export class LspMcpServer {
   private getSymbolReferencesTool(): Tool {
     return {
       name: 'get_symbol_references',
-      description: 'Get all symbol usage locations',
+      description: 'Get all workspace symbol usage locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -496,15 +496,15 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for workspace symbol search
+   * Tool definition for symbol search
    * 
    * @private
-   * @returns {Tool} Workspace symbols tool
+   * @returns {Tool} Symbols tool
    */
   private getSymbolsTool(): Tool {
     return {
       name: 'get_symbols',
-      description: 'Get symbols across entire workspace',
+      description: 'Search for symbols across entire workspace by name',
       inputSchema: {
         type: 'object',
         properties: {
@@ -562,13 +562,13 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles get completions tool requests
+   * Handles get code completions tool requests
    * 
    * @private
-   * @param {GetCompletionsArgs} args - Tool arguments
+   * @param {GetCodeCompletionsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetCompletions(args: GetCompletionsArgs): Promise<any> {
+  private async handleGetCodeCompletions(args: GetCodeCompletionsArgs): Promise<any> {
     if (!args.file_path || args.character === undefined || args.line === undefined) {
       return 'Missing required arguments: character, file_path, and line';
     }
@@ -633,7 +633,7 @@ export class LspMcpServer {
    */
   private async handleGetDocumentRangeFormat(args: GetDocumentRangeFormatArgs): Promise<any> {
     if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
-        args.end_line === undefined || args.end_character === undefined) {
+      args.end_line === undefined || args.end_character === undefined) {
       return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
     }
     const params = {
@@ -806,10 +806,10 @@ export class LspMcpServer {
    * Handles get symbol definitions tool requests
    * 
    * @private
-   * @param {GetSymbolArgs} args - Tool arguments
+   * @param {GetSymbolDefinitionsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetSymbolDefinitions(args: GetSymbolArgs): Promise<any> {
+  private async handleGetSymbolDefinitions(args: GetSymbolDefinitionsArgs): Promise<any> {
     if (!args.file_path || args.character === undefined || args.line === undefined) {
       return 'Missing required arguments: character, file_path, and line';
     }
@@ -842,7 +842,7 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles workspace symbols tool requests
+   * Handles symbol search tool requests
    * 
    * @private
    * @param {GetSymbolsArgs} args - Tool arguments
@@ -1015,7 +1015,7 @@ export class LspMcpServer {
    */
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
-    this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
+    this.toolHandlers.set('get_code_completions', this.handleGetCodeCompletions.bind(this));
     this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
     this.toolHandlers.set('get_document_range_format', this.handleGetDocumentRangeFormat.bind(this));
