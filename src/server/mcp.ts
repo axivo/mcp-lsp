@@ -21,6 +21,7 @@ import {
   DefinitionRequest,
   DocumentFormattingRequest,
   DocumentLinkRequest,
+  DocumentRangeFormattingRequest,
   DocumentSymbolRequest,
   FoldingRangeRequest,
   HoverRequest,
@@ -54,6 +55,14 @@ interface GetDocumentFormatArgs {
 
 interface GetDocumentLinksArgs {
   file_path: string;
+}
+
+interface GetDocumentRangeFormatArgs {
+  end_character: number;
+  end_line: number;
+  file_path: string;
+  start_character: number;
+  start_line: number;
 }
 
 interface GetDocumentSymbolsArgs {
@@ -169,6 +178,7 @@ export class LspMcpServer {
       this.getCompletionsTool(),
       this.getDocumentFormatTool(),
       this.getDocumentLinksTool(),
+      this.getDocumentRangeFormatTool(),
       this.getDocumentSymbolsTool(),
       this.getFoldingRangesTool(),
       this.getHoverTool(),
@@ -266,6 +276,30 @@ export class LspMcpServer {
           file_path: { type: 'string', description: 'Path to the project file' }
         },
         required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document range format
+   * 
+   * @private
+   * @returns {Tool} Document range format tool
+   */
+  private getDocumentRangeFormatTool(): Tool {
+    return {
+      name: 'get_document_range_format',
+      description: 'Get range formatting suggestions using language server formatting rules',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
       }
     };
   }
@@ -587,6 +621,35 @@ export class LspMcpServer {
       }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get document range format tool requests
+   * 
+   * @private
+   * @param {GetDocumentRangeFormatArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentRangeFormat(args: GetDocumentRangeFormatArgs): Promise<any> {
+    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
+        args.end_line === undefined || args.end_character === undefined) {
+      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
+    }
+    const params = {
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: {
+        uri: `file://${args.file_path}`
+      },
+      options: {
+        tabSize: 2,
+        insertSpaces: true
+      }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
     return result;
   }
 
@@ -955,6 +1018,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
+    this.toolHandlers.set('get_document_range_format', this.handleGetDocumentRangeFormat.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
