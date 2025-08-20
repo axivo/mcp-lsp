@@ -21,6 +21,7 @@ import {
   DefinitionRequest,
   DocumentLinkRequest,
   DocumentSymbolRequest,
+  FoldingRangeRequest,
   HoverRequest,
   ImplementationRequest,
   ReferenceParams,
@@ -51,6 +52,10 @@ interface GetDocumentLinksArgs {
 }
 
 interface GetDocumentSymbolsArgs {
+  file_path: string;
+}
+
+interface GetFoldingRangesArgs {
   file_path: string;
 }
 
@@ -159,6 +164,7 @@ export class LspMcpServer {
       this.getCompletionsTool(),
       this.getDocumentLinksTool(),
       this.getDocumentSymbolsTool(),
+      this.getFoldingRangesTool(),
       this.getHoverTool(),
       this.getImplementationsTool(),
       this.getServerProjectsTool(),
@@ -248,6 +254,26 @@ export class LspMcpServer {
     return {
       name: 'get_document_symbols',
       description: 'Get symbols across entire document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting folding ranges
+   * 
+   * @private
+   * @returns {Tool} Folding ranges tool
+   */
+  private getFoldingRangesTool(): Tool {
+    return {
+      name: 'get_folding_ranges',
+      description: 'Get folding ranges for code organization',
       inputSchema: {
         type: 'object',
         properties: {
@@ -531,6 +557,26 @@ export class LspMcpServer {
       }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get folding ranges tool requests
+   * 
+   * @private
+   * @param {GetFoldingRangesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetFoldingRanges(args: GetFoldingRangesArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: {
+        uri: `file://${args.file_path}`
+      }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
     return result;
   }
 
@@ -859,6 +905,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
+    this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
