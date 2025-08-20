@@ -19,6 +19,7 @@ import {
   CodeActionRequest,
   CompletionRequest,
   DefinitionRequest,
+  DocumentFormattingRequest,
   DocumentLinkRequest,
   DocumentSymbolRequest,
   FoldingRangeRequest,
@@ -45,6 +46,10 @@ interface GetCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetDocumentFormatArgs {
+  file_path: string;
 }
 
 interface GetDocumentLinksArgs {
@@ -162,6 +167,7 @@ export class LspMcpServer {
     return [
       this.getCodeActionsTool(),
       this.getCompletionsTool(),
+      this.getDocumentFormatTool(),
       this.getDocumentLinksTool(),
       this.getDocumentSymbolsTool(),
       this.getFoldingRangesTool(),
@@ -220,6 +226,26 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document format
+   * 
+   * @private
+   * @returns {Tool} Document format tool
+   */
+  private getDocumentFormatTool(): Tool {
+    return {
+      name: 'get_document_format',
+      description: 'Get document formatting suggestions using language server formatting rules',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
       }
     };
   }
@@ -517,6 +543,30 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get document format tool requests
+   * 
+   * @private
+   * @param {GetDocumentFormatArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentFormat(args: GetDocumentFormatArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: {
+        uri: `file://${args.file_path}`
+      },
+      options: {
+        tabSize: 2,
+        insertSpaces: true
+      }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
     return result;
   }
 
@@ -903,6 +953,7 @@ export class LspMcpServer {
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
+    this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
