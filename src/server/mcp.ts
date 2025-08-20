@@ -47,6 +47,10 @@ interface GetSymbolsArgs {
   query: string;
 }
 
+interface ListProjectsArgs {
+  language_id: string;
+}
+
 interface RestartServerArgs {
   language_id: string;
 }
@@ -102,6 +106,7 @@ export class LspMcpServer {
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getSymbolsTool(),
+      this.listProjectsTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
@@ -195,6 +200,26 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for listing projects for a language server
+   * 
+   * @private
+   * @returns {Tool} List projects tool
+   */
+  private listProjectsTool(): Tool {
+    return {
+      name: 'list_projects',
+      description: 'List available projects for a specific language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
    * Handles get server status tool requests
    * 
    * @private
@@ -257,6 +282,32 @@ export class LspMcpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
     return result;
+  }
+
+  /**
+   * Handles list projects tool requests
+   * 
+   * @private
+   * @param {ListProjectsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleListProjects(args: ListProjectsArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured`;
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projects = Object.entries(serverConfig.projects).map(([name, path]) => ({
+      project_name: name,
+      path: path,
+      extensions: serverConfig.extensions
+    }));
+    return projects;
   }
 
   /**
@@ -417,6 +468,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
+    this.toolHandlers.set('list_projects', this.handleListProjects.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
