@@ -150,7 +150,7 @@ interface GetServerProjectsArgs {
 }
 
 interface GetServerStatusArgs {
-  language_id: string;
+  language_id?: string;
 }
 
 interface GetSignatureArgs {
@@ -622,13 +622,13 @@ export class LspMcpServer {
   private getServerStatusTool(): Tool {
     return {
       name: 'get_server_status',
-      description: 'Get status of a specific language server',
+      description: 'Get status of all language servers or a specific language server',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Optional language identifier (e.g., python, typescript)' }
         },
-        required: ['language_id']
+        required: []
       }
     };
   }
@@ -1275,21 +1275,36 @@ export class LspMcpServer {
    */
   private async handleGetServerStatus(args: GetServerStatusArgs): Promise<any> {
     if (!args.language_id) {
-      return 'Missing required argument: language_id';
+      const status = this.client.getServers().map(async (languageId) => {
+        const isServerRunning = this.client.isServerRunning(languageId);
+        if (!isServerRunning) {
+          return [languageId, { status: 'stopped', uptime: 0 }];
+        }
+        const params: WorkspaceSymbolParams = { query: '' };
+        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
+        const uptime = this.client.getServerUptime(languageId);
+        if (result.content) {
+          return [languageId, { status: 'starting', uptime }];
+        }
+        return [languageId, { status: 'ready', uptime }];
+      });
+      const results = await Promise.all(status);
+      return Object.fromEntries(results);
     }
     if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured`;
+      return { status: 'not_configured', uptime: 0 };
     }
     const isServerRunning = this.client.isServerRunning(args.language_id);
     if (!isServerRunning) {
-      return `Language server '${args.language_id}' is stopped`;
+      return { status: 'stopped', uptime: 0 };
     }
     const params: WorkspaceSymbolParams = { query: 'test' };
     const result = await this.client.sendRequest(args.language_id, WorkspaceSymbolRequest.method, params);
+    const uptime = this.client.getServerUptime(args.language_id);
     if (result.content) {
-      return `Language server '${args.language_id}' is starting`;
+      return { status: 'starting', uptime };
     }
-    return `Language server '${args.language_id}' is ready`;
+    return { status: 'ready', uptime };
   }
 
   /**
@@ -1327,7 +1342,7 @@ export class LspMcpServer {
     }
     const serverConfig = this.config.getServerConfig(args.language_id);
     if (!serverConfig.command) {
-      return `Language server '${args.language_id}' is not configured`;
+      return `Language server '${args.language_id}' is not configured.`;
     }
     await this.client.startServer(args.language_id);
     return `Language server '${args.language_id}' started successfully.`;
