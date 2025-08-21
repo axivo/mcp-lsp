@@ -15,6 +15,10 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
+  CallHierarchyIncomingCallsParams,
+  CallHierarchyIncomingCallsRequest,
+  CallHierarchyOutgoingCallsParams,
+  CallHierarchyOutgoingCallsRequest,
   CallHierarchyPrepareParams,
   CallHierarchyPrepareRequest,
   CodeActionParams,
@@ -37,6 +41,10 @@ import {
   TypeDefinitionRequest,
   TypeHierarchyPrepareParams,
   TypeHierarchyPrepareRequest,
+  TypeHierarchySubtypesParams,
+  TypeHierarchySubtypesRequest,
+  TypeHierarchySupertypesParams,
+  TypeHierarchySupertypesRequest,
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -97,6 +105,14 @@ interface GetImplementationsArgs {
   line: number;
 }
 
+interface GetIncomingCallsArgs {
+  item: any;
+}
+
+interface GetOutgoingCallsArgs {
+  item: any;
+}
+
 interface GetServerProjectsArgs {
   language_id: string;
 }
@@ -109,6 +125,14 @@ interface GetSignatureHelpArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetSubtypesArgs {
+  item: any;
+}
+
+interface GetSupertypesArgs {
+  item: any;
 }
 
 interface GetSymbolDefinitionsArgs {
@@ -406,6 +430,46 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for getting incoming calls
+   * 
+   * @private
+   * @returns {Tool} Get incoming calls tool
+   */
+  private getIncomingCallsTool(): Tool {
+    return {
+      name: 'get_incoming_calls',
+      description: 'Get incoming calls for a call hierarchy item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting outgoing calls
+   * 
+   * @private
+   * @returns {Tool} Get outgoing calls tool
+   */
+  private getOutgoingCallsTool(): Tool {
+    return {
+      name: 'get_outgoing_calls',
+      description: 'Get outgoing calls for a call hierarchy item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting server projects
    * 
    * @private
@@ -463,6 +527,46 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting subtypes
+   * 
+   * @private
+   * @returns {Tool} Get subtypes tool
+   */
+  private getSubtypesTool(): Tool {
+    return {
+      name: 'get_subtypes',
+      description: 'Get subtypes for a type hierarchy item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting supertypes
+   * 
+   * @private
+   * @returns {Tool} Get supertypes tool
+   */
+  private getSupertypesTool(): Tool {
+    return {
+      name: 'get_supertypes',
+      description: 'Get supertypes for a type hierarchy item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy' }
+        },
+        required: ['item']
       }
     };
   }
@@ -574,9 +678,13 @@ export class LspMcpServer {
       this.getFoldingRangesTool(),
       this.getHoverTool(),
       this.getImplementationsTool(),
+      this.getIncomingCallsTool(),
+      this.getOutgoingCallsTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSignatureHelpTool(),
+      this.getSubtypesTool(),
+      this.getSupertypesTool(),
       this.getSymbolDefinitionsTool(),
       this.getSymbolReferencesTool(),
       this.getSymbolRenamesTool(),
@@ -846,6 +954,50 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get incoming calls tool requests
+   * 
+   * @private
+   * @param {GetIncomingCallsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetIncomingCalls(args: GetIncomingCallsArgs): Promise<any> {
+    if (!args.item) {
+      return 'Missing required argument: item';
+    }
+    const params: CallHierarchyIncomingCallsParams = {
+      item: args.item
+    };
+    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
+    if (!filePath) {
+      return 'Invalid call hierarchy item: missing URI';
+    }
+    const result = await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get outgoing calls tool requests
+   * 
+   * @private
+   * @param {GetOutgoingCallsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetOutgoingCalls(args: GetOutgoingCallsArgs): Promise<any> {
+    if (!args.item) {
+      return 'Missing required argument: item';
+    }
+    const params: CallHierarchyOutgoingCallsParams = {
+      item: args.item
+    };
+    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
+    if (!filePath) {
+      return 'Invalid call hierarchy item: missing URI';
+    }
+    const result = await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get server projects tool requests
    * 
    * @private
@@ -913,6 +1065,50 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get subtypes tool requests
+   * 
+   * @private
+   * @param {GetSubtypesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSubtypes(args: GetSubtypesArgs): Promise<any> {
+    if (!args.item) {
+      return 'Missing required argument: item';
+    }
+    const params: TypeHierarchySubtypesParams = {
+      item: args.item
+    };
+    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
+    if (!filePath) {
+      return 'Invalid type hierarchy item: missing URI';
+    }
+    const result = await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get supertypes tool requests
+   * 
+   * @private
+   * @param {GetSupertypesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSupertypes(args: GetSupertypesArgs): Promise<any> {
+    if (!args.item) {
+      return 'Missing required argument: item';
+    }
+    const params: TypeHierarchySupertypesParams = {
+      item: args.item
+    };
+    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
+    if (!filePath) {
+      return 'Invalid type hierarchy item: missing URI';
+    }
+    const result = await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
     return result;
   }
 
@@ -1167,6 +1363,7 @@ export class LspMcpServer {
    * @private
    */
   private setupToolHandlers(): void {
+    this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_code_completions', this.handleGetCodeCompletions.bind(this));
     this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
@@ -1176,15 +1373,18 @@ export class LspMcpServer {
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
+    this.toolHandlers.set('get_incoming_calls', this.handleGetIncomingCalls.bind(this));
+    this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));
+    this.toolHandlers.set('get_subtypes', this.handleGetSubtypes.bind(this));
+    this.toolHandlers.set('get_supertypes', this.handleGetSupertypes.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
     this.toolHandlers.set('get_symbol_references', this.handleGetSymbolReferences.bind(this));
     this.toolHandlers.set('get_symbol_renames', this.handleGetSymbolRenames.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
-    this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
     this.toolHandlers.set('get_type_hierarchy', this.handleGetTypeHierarchy.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));

@@ -19,6 +19,8 @@ import {
   StreamMessageWriter
 } from 'vscode-jsonrpc/node.js';
 import {
+  CallHierarchyIncomingCallsRequest,
+  CallHierarchyOutgoingCallsRequest,
   CallHierarchyPrepareRequest,
   ClientCapabilities,
   CodeActionRequest,
@@ -44,6 +46,8 @@ import {
   TextDocumentItem,
   TypeDefinitionRequest,
   TypeHierarchyPrepareRequest,
+  TypeHierarchySubtypesRequest,
+  TypeHierarchySupertypesRequest,
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -485,6 +489,8 @@ export class LspClient {
       return `Language server '${languageId}' is not running.`;
     }
     const methods: string[] = [
+      CallHierarchyIncomingCallsRequest.method,
+      CallHierarchyOutgoingCallsRequest.method,
       CallHierarchyPrepareRequest.method,
       CodeActionRequest.method,
       CompletionRequest.method,
@@ -500,7 +506,9 @@ export class LspClient {
       RenameRequest.method,
       SignatureHelpRequest.method,
       TypeDefinitionRequest.method,
-      TypeHierarchyPrepareRequest.method
+      TypeHierarchyPrepareRequest.method,
+      TypeHierarchySubtypesRequest.method,
+      TypeHierarchySupertypesRequest.method
     ];
     if (methods.includes(method)) {
       const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);
