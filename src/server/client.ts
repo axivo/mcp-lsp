@@ -19,6 +19,7 @@ import {
   StreamMessageWriter
 } from 'vscode-jsonrpc/node.js';
 import {
+  CallHierarchyPrepareRequest,
   ClientCapabilities,
   CodeActionRequest,
   CompletionRequest,
@@ -42,6 +43,7 @@ import {
   SignatureHelpRequest,
   TextDocumentItem,
   TypeDefinitionRequest,
+  TypeHierarchyPrepareRequest,
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -306,6 +308,7 @@ export class LspClient {
         workspaceFolders: true
       },
       textDocument: {
+        callHierarchy: { dynamicRegistration: false },
         codeAction: { dynamicRegistration: false },
         completion: { dynamicRegistration: false },
         definition: { dynamicRegistration: false },
@@ -323,7 +326,8 @@ export class LspClient {
         rename: { dynamicRegistration: false },
         signatureHelp: { dynamicRegistration: false },
         synchronization: { dynamicRegistration: false },
-        typeDefinition: { dynamicRegistration: false }
+        typeDefinition: { dynamicRegistration: false },
+        typeHierarchy: { dynamicRegistration: false }
       }
     };
   }
@@ -481,6 +485,7 @@ export class LspClient {
       return `Language server '${languageId}' is not running.`;
     }
     const methods: string[] = [
+      CallHierarchyPrepareRequest.method,
       CodeActionRequest.method,
       CompletionRequest.method,
       DefinitionRequest.method,
@@ -494,7 +499,8 @@ export class LspClient {
       ReferencesRequest.method,
       RenameRequest.method,
       SignatureHelpRequest.method,
-      TypeDefinitionRequest.method
+      TypeDefinitionRequest.method,
+      TypeHierarchyPrepareRequest.method
     ];
     if (methods.includes(method)) {
       const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);

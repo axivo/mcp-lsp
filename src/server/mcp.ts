@@ -15,6 +15,8 @@ import {
   Tool,
 } from '@modelcontextprotocol/sdk/types.js';
 import {
+  CallHierarchyPrepareParams,
+  CallHierarchyPrepareRequest,
   CodeActionParams,
   CodeActionRequest,
   CompletionRequest,
@@ -33,11 +35,19 @@ import {
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
+  TypeHierarchyPrepareParams,
+  TypeHierarchyPrepareRequest,
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { LspClient } from "./client.js";
 import { LspConfigParser } from "./config.js";
+
+interface GetCallHierarchyArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
 
 interface GetCodeActionsArgs {
   character: number;
@@ -132,6 +142,12 @@ interface GetTypeDefinitionsArgs {
   line: number;
 }
 
+interface GetTypeHierarchyArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
+
 interface RestartServerArgs {
   language_id: string;
 }
@@ -176,34 +192,25 @@ export class LspMcpServer {
   }
 
   /**
-   * Returns all available LSP tools
+   * Tool definition for getting call hierarchy
    * 
    * @private
-   * @returns {Tool[]} Array of LSP tool definitions
+   * @returns {Tool} Get call hierarchy tool
    */
-  private getLspTools(): Tool[] {
-    return [
-      this.getCodeActionsTool(),
-      this.getCodeCompletionsTool(),
-      this.getDocumentFormatTool(),
-      this.getDocumentLinksTool(),
-      this.getDocumentRangeFormatTool(),
-      this.getDocumentSymbolsTool(),
-      this.getFoldingRangesTool(),
-      this.getHoverTool(),
-      this.getImplementationsTool(),
-      this.getServerProjectsTool(),
-      this.getServerStatusTool(),
-      this.getSignatureHelpTool(),
-      this.getSymbolDefinitionsTool(),
-      this.getSymbolReferencesTool(),
-      this.getSymbolRenamesTool(),
-      this.getSymbolsTool(),
-      this.getTypeDefinitionsTool(),
-      this.restartServerTool(),
-      this.startServerTool(),
-      this.stopServerTool()
-    ];
+  private getCallHierarchyTool(): Tool {
+    return {
+      name: 'get_call_hierarchy',
+      description: 'Prepare call hierarchy for the language element',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
   }
 
   /**
@@ -550,6 +557,39 @@ export class LspMcpServer {
   }
 
   /**
+   * Returns all available MCP tools
+   * 
+   * @private
+   * @returns {Tool[]} Array of MCP tool definitions
+   */
+  private getTools(): Tool[] {
+    return [
+      this.getCallHierarchyTool(),
+      this.getCodeActionsTool(),
+      this.getCodeCompletionsTool(),
+      this.getDocumentFormatTool(),
+      this.getDocumentLinksTool(),
+      this.getDocumentRangeFormatTool(),
+      this.getDocumentSymbolsTool(),
+      this.getFoldingRangesTool(),
+      this.getHoverTool(),
+      this.getImplementationsTool(),
+      this.getServerProjectsTool(),
+      this.getServerStatusTool(),
+      this.getSignatureHelpTool(),
+      this.getSymbolDefinitionsTool(),
+      this.getSymbolReferencesTool(),
+      this.getSymbolRenamesTool(),
+      this.getSymbolsTool(),
+      this.getTypeDefinitionsTool(),
+      this.getTypeHierarchyTool(),
+      this.restartServerTool(),
+      this.startServerTool(),
+      this.stopServerTool()
+    ];
+  }
+
+  /**
    * Tool definition for getting type definitions
    * 
    * @private
@@ -569,6 +609,47 @@ export class LspMcpServer {
         required: ['character', 'file_path', 'line']
       }
     };
+  }
+
+  /**
+   * Tool definition for getting type hierarchy
+   * 
+   * @private
+   * @returns {Tool} Get type hierarchy tool
+   */
+  private getTypeHierarchyTool(): Tool {
+    return {
+      name: 'get_type_hierarchy',
+      description: 'Prepare type hierarchy for the language element',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Handles get call hierarchy tool requests
+   * 
+   * @private
+   * @param {GetCallHierarchyArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetCallHierarchy(args: GetCallHierarchyArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: CallHierarchyPrepareParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
+    return result;
   }
 
   /**
@@ -942,13 +1023,22 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles tool listing requests from MCP clients
+   * Handles get type hierarchy tool requests
    * 
    * @private
-   * @returns {Promise<Object>} Response containing available tools
+   * @param {GetTypeHierarchyArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
    */
-  private async handleListTools(): Promise<any> {
-    return { tools: this.getLspTools() };
+  private async handleGetTypeHierarchy(args: GetTypeHierarchyArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: TypeHierarchyPrepareParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
+    return result;
   }
 
   /**
@@ -1026,6 +1116,16 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles tool listing requests from MCP clients
+   * 
+   * @private
+   * @returns {Promise<Object>} Response containing available tools
+   */
+  private async handleTools(): Promise<any> {
+    return { tools: this.getTools() };
+  }
+
+  /**
    * Tool definition for restarting language servers
    * 
    * @private
@@ -1057,7 +1157,7 @@ export class LspMcpServer {
     );
     this.server.setRequestHandler(
       ListToolsRequestSchema,
-      this.handleListTools.bind(this)
+      this.handleTools.bind(this)
     );
   }
 
@@ -1084,6 +1184,8 @@ export class LspMcpServer {
     this.toolHandlers.set('get_symbol_renames', this.handleGetSymbolRenames.bind(this));
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
+    this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
+    this.toolHandlers.set('get_type_hierarchy', this.handleGetTypeHierarchy.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
