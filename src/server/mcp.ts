@@ -243,7 +243,7 @@ export class LspMcpServer {
     this.client = new LspClient(configPath);
     this.config = new LspConfigParser(configPath);
     this.server = new Server(
-      { name: 'language-server', version: this.client.version() },
+      { name: 'language-server-protocol', version: this.client.version() },
       { capabilities: { tools: {} } }
     );
     this.toolHandlers = new Map<string, ToolHandler>();
