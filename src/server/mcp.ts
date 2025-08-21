@@ -71,41 +71,17 @@ interface GetCodeActionsArgs {
   line: number;
 }
 
-interface GetCodeCompletionsArgs {
+interface GetColorsArgs {
+  file_path: string;
+}
+
+interface GetCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
 }
 
-interface GetDocumentColorsArgs {
-  file_path: string;
-}
-
-interface GetDocumentFormatArgs {
-  file_path: string;
-}
-
-interface GetDocumentInlayHintsArgs {
-  end_character: number;
-  end_line: number;
-  file_path: string;
-  start_character: number;
-  start_line: number;
-}
-
-interface GetDocumentLinksArgs {
-  file_path: string;
-}
-
-interface GetDocumentRangeFormatArgs {
-  end_character: number;
-  end_line: number;
-  file_path: string;
-  start_character: number;
-  start_line: number;
-}
-
-interface GetDocumentSymbolsArgs {
+interface GetFormatArgs {
   file_path: string;
 }
 
@@ -133,14 +109,34 @@ interface GetInlayHintArgs {
   item: any;
 }
 
+interface GetInlayHintsArgs {
+  end_character: number;
+  end_line: number;
+  file_path: string;
+  start_character: number;
+  start_line: number;
+}
+
 interface GetLinkedEditingRangeArgs {
   character: number;
   file_path: string;
   line: number;
 }
 
+interface GetLinksArgs {
+  file_path: string;
+}
+
 interface GetOutgoingCallsArgs {
   item: any;
+}
+
+interface GetRangeFormatArgs {
+  end_character: number;
+  end_line: number;
+  file_path: string;
+  start_character: number;
+  start_line: number;
 }
 
 interface GetSelectionRangeArgs {
@@ -157,7 +153,7 @@ interface GetServerStatusArgs {
   language_id: string;
 }
 
-interface GetSignatureHelpArgs {
+interface GetSignatureArgs {
   character: number;
   file_path: string;
   line: number;
@@ -192,8 +188,7 @@ interface GetSymbolRenamesArgs {
 }
 
 interface GetSymbolsArgs {
-  project_name: string;
-  query: string;
+  file_path: string;
 }
 
 interface GetTypeDefinitionsArgs {
@@ -206,6 +201,11 @@ interface GetTypeHierarchyArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetWorkspaceSymbolsArgs {
+  project_name: string;
+  query: string;
 }
 
 interface RestartServerArgs {
@@ -296,14 +296,34 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for getting document colors
+   * 
+   * @private
+   * @returns {Tool} Document colors tool
+   */
+  private getColorsTool(): Tool {
+    return {
+      name: 'get_colors',
+      description: 'Get color information from a document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting code completions
    * 
    * @private
    * @returns {Tool} Code completions tool
    */
-  private getCodeCompletionsTool(): Tool {
+  private getCompletionsTool(): Tool {
     return {
-      name: 'get_code_completions',
+      name: 'get_completions',
       description: 'Get code completion suggestions at a specific position',
       inputSchema: {
         type: 'object',
@@ -318,15 +338,15 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for getting document colors
+   * Tool definition for getting folding ranges
    * 
    * @private
-   * @returns {Tool} Document colors tool
+   * @returns {Tool} Folding ranges tool
    */
-  private getDocumentColorsTool(): Tool {
+  private getFoldingRangesTool(): Tool {
     return {
-      name: 'get_document_colors',
-      description: 'Get color information from a document',
+      name: 'get_folding_ranges',
+      description: 'Get folding ranges for code organization',
       inputSchema: {
         type: 'object',
         properties: {
@@ -343,118 +363,10 @@ export class LspMcpServer {
    * @private
    * @returns {Tool} Document format tool
    */
-  private getDocumentFormatTool(): Tool {
+  private getFormatTool(): Tool {
     return {
-      name: 'get_document_format',
+      name: 'get_format',
       description: 'Get document formatting suggestions using language server formatting rules',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          file_path: { type: 'string', description: 'Path to the project file' }
-        },
-        required: ['file_path']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting document inlay hints
-   * 
-   * @private
-   * @returns {Tool} Document inlay hints tool
-   */
-  private getDocumentInlayHintsTool(): Tool {
-    return {
-      name: 'get_document_inlay_hints',
-      description: 'Get inlay hints for a document range',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          end_character: { type: 'number', description: 'End character position (zero-based)' },
-          end_line: { type: 'number', description: 'End line number (zero-based)' },
-          file_path: { type: 'string', description: 'Path to the project file' },
-          start_character: { type: 'number', description: 'Start character position (zero-based)' },
-          start_line: { type: 'number', description: 'Start line number (zero-based)' }
-        },
-        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting document links
-   * 
-   * @private
-   * @returns {Tool} Document links tool
-   */
-  private getDocumentLinksTool(): Tool {
-    return {
-      name: 'get_document_links',
-      description: 'Get document links and references',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          file_path: { type: 'string', description: 'Path to the project file' }
-        },
-        required: ['file_path']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting document range format
-   * 
-   * @private
-   * @returns {Tool} Document range format tool
-   */
-  private getDocumentRangeFormatTool(): Tool {
-    return {
-      name: 'get_document_range_format',
-      description: 'Get range formatting suggestions using language server formatting rules',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          end_character: { type: 'number', description: 'End character position (zero-based)' },
-          end_line: { type: 'number', description: 'End line number (zero-based)' },
-          file_path: { type: 'string', description: 'Path to the project file' },
-          start_character: { type: 'number', description: 'Start character position (zero-based)' },
-          start_line: { type: 'number', description: 'Start line number (zero-based)' }
-        },
-        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting document symbols
-   * 
-   * @private
-   * @returns {Tool} Document symbols tool
-   */
-  private getDocumentSymbolsTool(): Tool {
-    return {
-      name: 'get_document_symbols',
-      description: 'Get symbols across entire document',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          file_path: { type: 'string', description: 'Path to the project file' }
-        },
-        required: ['file_path']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting folding ranges
-   * 
-   * @private
-   * @returns {Tool} Folding ranges tool
-   */
-  private getFoldingRangesTool(): Tool {
-    return {
-      name: 'get_folding_ranges',
-      description: 'Get folding ranges for code organization',
       inputSchema: {
         type: 'object',
         properties: {
@@ -542,9 +454,33 @@ export class LspMcpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Inlay hint item from get_document_inlay_hints' }
+          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints' }
         },
         required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting inlay hints
+   * 
+   * @private
+   * @returns {Tool} Inlay hints tool
+   */
+  private getInlayHintsTool(): Tool {
+    return {
+      name: 'get_inlay_hints',
+      description: 'Get inlay hints for a document range',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
       }
     };
   }
@@ -572,6 +508,26 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for getting document links
+   * 
+   * @private
+   * @returns {Tool} Document links tool
+   */
+  private getLinksTool(): Tool {
+    return {
+      name: 'get_links',
+      description: 'Get document links and references',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting outgoing calls
    * 
    * @private
@@ -587,6 +543,30 @@ export class LspMcpServer {
           item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
         },
         required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting range format
+   * 
+   * @private
+   * @returns {Tool} Range format tool
+   */
+  private getRangeFormatTool(): Tool {
+    return {
+      name: 'get_range_format',
+      description: 'Get range formatting suggestions using language server formatting rules',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
       }
     };
   }
@@ -659,9 +639,9 @@ export class LspMcpServer {
    * @private
    * @returns {Tool} Signature help tool
    */
-  private getSignatureHelpTool(): Tool {
+  private getSignatureTool(): Tool {
     return {
-      name: 'get_signature_help',
+      name: 'get_signature',
       description: 'Get function signature help and parameter information at a specific position',
       inputSchema: {
         type: 'object',
@@ -784,22 +764,21 @@ export class LspMcpServer {
   }
 
   /**
-   * Tool definition for symbol search
+   * Tool definition for getting document symbols
    * 
    * @private
-   * @returns {Tool} Symbols tool
+   * @returns {Tool} Document symbols tool
    */
   private getSymbolsTool(): Tool {
     return {
       name: 'get_symbols',
-      description: 'Search for symbols across entire workspace by name',
+      description: 'Get symbols across entire document',
       inputSchema: {
         type: 'object',
         properties: {
-          project_name: { type: 'string', description: 'Project name to search within' },
-          query: { type: 'string', description: 'Symbol search query' }
+          file_path: { type: 'string', description: 'Path to the project file' }
         },
-        required: ['project_name', 'query']
+        required: ['file_path']
       }
     };
   }
@@ -814,24 +793,23 @@ export class LspMcpServer {
     return [
       this.getCallHierarchyTool(),
       this.getCodeActionsTool(),
-      this.getCodeCompletionsTool(),
-      this.getDocumentColorsTool(),
-      this.getDocumentFormatTool(),
-      this.getDocumentInlayHintsTool(),
-      this.getDocumentLinksTool(),
-      this.getDocumentRangeFormatTool(),
-      this.getDocumentSymbolsTool(),
+      this.getColorsTool(),
+      this.getCompletionsTool(),
       this.getFoldingRangesTool(),
+      this.getFormatTool(),
       this.getHoverTool(),
       this.getImplementationsTool(),
       this.getIncomingCallsTool(),
       this.getInlayHintTool(),
+      this.getInlayHintsTool(),
       this.getLinkedEditingRangeTool(),
+      this.getLinksTool(),
       this.getOutgoingCallsTool(),
+      this.getRangeFormatTool(),
       this.getSelectionRangeTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
-      this.getSignatureHelpTool(),
+      this.getSignatureTool(),
       this.getSubtypesTool(),
       this.getSupertypesTool(),
       this.getSymbolDefinitionsTool(),
@@ -840,6 +818,7 @@ export class LspMcpServer {
       this.getSymbolsTool(),
       this.getTypeDefinitionsTool(),
       this.getTypeHierarchyTool(),
+      this.getWorkspaceSymbolsTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
@@ -891,6 +870,27 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for workspace symbol search
+   * 
+   * @private
+   * @returns {Tool} Workspace symbols tool
+   */
+  private getWorkspaceSymbolsTool(): Tool {
+    return {
+      name: 'get_workspace_symbols',
+      description: 'Search for symbols across entire workspace by name',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          project_name: { type: 'string', description: 'Project name to search within' },
+          query: { type: 'string', description: 'Symbol search query' }
+        },
+        required: ['project_name', 'query']
+      }
+    };
+  }
+
+  /**
    * Handles get call hierarchy tool requests
    * 
    * @private
@@ -933,32 +933,13 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles get code completions tool requests
+   * Handles get colors tool requests
    * 
    * @private
-   * @param {GetCodeCompletionsArgs} args - Tool arguments
+   * @param {GetColorsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetCodeCompletions(args: GetCodeCompletionsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
-    return result;
-  }
-
-  /**
-   * Handles get document colors tool requests
-   * 
-   * @private
-   * @param {GetDocumentColorsArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetDocumentColors(args: GetDocumentColorsArgs): Promise<any> {
+  private async handleGetColors(args: GetColorsArgs): Promise<any> {
     if (!args.file_path) {
       return 'Missing required argument: file_path';
     }
@@ -970,104 +951,21 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles get document format tool requests
+   * Handles get completions tool requests
    * 
    * @private
-   * @param {GetDocumentFormatArgs} args - Tool arguments
+   * @param {GetCompletionsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetDocumentFormat(args: GetDocumentFormatArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
+  private async handleGetCompletions(args: GetCompletionsArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
     }
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` },
-      options: { tabSize: 2, insertSpaces: true }
-    };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
-    return result;
-  }
-
-  /**
-   * Handles get document inlay hints tool requests
-   * 
-   * @private
-   * @param {GetDocumentInlayHintsArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetDocumentInlayHints(args: GetDocumentInlayHintsArgs): Promise<any> {
-    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
-      args.end_line === undefined || args.end_character === undefined) {
-      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
-    }
-    const params: InlayHintParams = {
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
-    return result;
-  }
-
-  /**
-   * Handles get document links tool requests
-   * 
-   * @private
-   * @param {GetDocumentLinksArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetDocumentLinks(args: GetDocumentLinksArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
-    return result;
-  }
-
-  /**
-   * Handles get document range format tool requests
-   * 
-   * @private
-   * @param {GetDocumentRangeFormatArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetDocumentRangeFormat(args: GetDocumentRangeFormatArgs): Promise<any> {
-    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
-      args.end_line === undefined || args.end_character === undefined) {
-      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
-    }
-    const params = {
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
-      textDocument: { uri: `file://${args.file_path}` },
-      options: { tabSize: 2, insertSpaces: true }
-    };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
-    return result;
-  }
-
-  /**
-   * Handles get document symbols tool requests
-   * 
-   * @private
-   * @param {GetDocumentSymbolsArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetDocumentSymbols(args: GetDocumentSymbolsArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
     return result;
   }
 
@@ -1086,6 +984,25 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get format tool requests
+   * 
+   * @private
+   * @param {GetFormatArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetFormat(args: GetFormatArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` },
+      options: { tabSize: 2, insertSpaces: true }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
     return result;
   }
 
@@ -1165,6 +1082,29 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get inlay hints tool requests
+   * 
+   * @private
+   * @param {GetInlayHintsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetInlayHints(args: GetInlayHintsArgs): Promise<any> {
+    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
+      args.end_line === undefined || args.end_character === undefined) {
+      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
+    }
+    const params: InlayHintParams = {
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get linked editing range tool requests
    * 
    * @private
@@ -1180,6 +1120,24 @@ export class LspMcpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get links tool requests
+   * 
+   * @private
+   * @param {GetLinksArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetLinks(args: GetLinksArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
     return result;
   }
 
@@ -1203,6 +1161,64 @@ export class LspMcpServer {
     }
     const result = await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
     return result;
+  }
+
+  /**
+   * Handles get range format tool requests
+   * 
+   * @private
+   * @param {GetRangeFormatArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetRangeFormat(args: GetRangeFormatArgs): Promise<any> {
+    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
+      args.end_line === undefined || args.end_character === undefined) {
+      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
+    }
+    const params = {
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: { uri: `file://${args.file_path}` },
+      options: { tabSize: 2, insertSpaces: true }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles tool execution requests from MCP clients
+   * 
+   * @private
+   * @param {CallToolRequest} request - The tool execution request
+   * @returns {Promise<Object>} Response containing tool execution results
+   */
+  private async handleRequest(request: CallToolRequest): Promise<any> {
+    if (!request.params.arguments) {
+      return 'No arguments provided';
+    }
+    const handler = this.toolHandlers.get(request.params.name);
+    if (!handler) {
+      return `Unknown tool: ${request.params.name}`;
+    }
+    const result = await handler(request.params.arguments);
+    return this.client.response(result, typeof result === 'string' ? false : true);
+  }
+
+  /**
+   * Handles restart server tool requests
+   * 
+   * @private
+   * @param {RestartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    await this.client.restartServer(args.language_id);
+    return `Language server '${args.language_id}' restarted successfully.`;
   }
 
   /**
@@ -1277,13 +1293,13 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles get signature help tool requests
+   * Handles get signature tool requests
    * 
    * @private
-   * @param {GetSignatureHelpArgs} args - Tool arguments
+   * @param {GetSignatureArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetSignatureHelp(args: GetSignatureHelpArgs): Promise<any> {
+  private async handleGetSignature(args: GetSignatureArgs): Promise<any> {
     if (!args.file_path || args.character === undefined || args.line === undefined) {
       return 'Missing required arguments: character, file_path, and line';
     }
@@ -1293,6 +1309,46 @@ export class LspMcpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
     return result;
+  }
+
+  /**
+   * Handles start server tool requests
+   * 
+   * @private
+   * @param {StartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStartServer(args: StartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    if (this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is already running.`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    if (!serverConfig.command) {
+      return `Language server '${args.language_id}' is not configured`;
+    }
+    await this.client.startServer(args.language_id);
+    return `Language server '${args.language_id}' started successfully.`;
+  }
+
+  /**
+   * Handles stop server tool requests
+   * 
+   * @private
+   * @param {StopServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStopServer(args: StopServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    await this.client.stopServer(args.language_id);
+    return `Language server '${args.language_id}' stopped successfully.`;
   }
 
   /**
@@ -1399,31 +1455,21 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles symbol search tool requests
+   * Handles get symbols tool requests
    * 
    * @private
    * @param {GetSymbolsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbols(args: GetSymbolsArgs): Promise<any> {
-    if (!args.project_name) {
-      return 'Missing required argument: project_name';
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
     }
-    if (!args.query) {
-      return 'Missing required argument: query';
-    }
-    const results: any[] = [];
-    for (const languageId of this.client.getServers()) {
-      if (this.client.isServerRunning(languageId)) {
-        await this.client.loadProjectFiles(languageId, args.project_name);
-        const params: WorkspaceSymbolParams = { query: args.query };
-        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
-        if (result && Array.isArray(result)) {
-          results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
-        }
-      }
-    }
-    return results;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    return result;
   }
 
   /**
@@ -1465,77 +1511,31 @@ export class LspMcpServer {
   }
 
   /**
-   * Handles tool execution requests from MCP clients
+   * Handles workspace symbol search tool requests
    * 
    * @private
-   * @param {CallToolRequest} request - The tool execution request
-   * @returns {Promise<Object>} Response containing tool execution results
-   */
-  private async handleRequest(request: CallToolRequest): Promise<any> {
-    if (!request.params.arguments) {
-      return 'No arguments provided';
-    }
-    const handler = this.toolHandlers.get(request.params.name);
-    if (!handler) {
-      return `Unknown tool: ${request.params.name}`;
-    }
-    const result = await handler(request.params.arguments);
-    return this.client.response(result, typeof result === 'string' ? false : true);
-  }
-
-  /**
-   * Handles restart server tool requests
-   * 
-   * @private
-   * @param {RestartServerArgs} args - Tool arguments
+   * @param {GetWorkspaceSymbolsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
+  private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
+    if (!args.project_name) {
+      return 'Missing required argument: project_name';
     }
-    await this.client.restartServer(args.language_id);
-    return `Language server '${args.language_id}' restarted successfully.`;
-  }
-
-  /**
-   * Handles start server tool requests
-   * 
-   * @private
-   * @param {StartServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStartServer(args: StartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
+    if (!args.query) {
+      return 'Missing required argument: query';
     }
-    if (this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is already running.`;
+    const results: any[] = [];
+    for (const languageId of this.client.getServers()) {
+      if (this.client.isServerRunning(languageId)) {
+        await this.client.loadProjectFiles(languageId, args.project_name);
+        const params: WorkspaceSymbolParams = { query: args.query };
+        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
+        if (result && Array.isArray(result)) {
+          results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
+        }
+      }
     }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    if (!serverConfig.command) {
-      return `Language server '${args.language_id}' is not configured`;
-    }
-    await this.client.startServer(args.language_id);
-    return `Language server '${args.language_id}' started successfully.`;
-  }
-
-  /**
-   * Handles stop server tool requests
-   * 
-   * @private
-   * @param {StopServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStopServer(args: StopServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    await this.client.stopServer(args.language_id);
-    return `Language server '${args.language_id}' stopped successfully.`;
+    return results;
   }
 
   /**
@@ -1592,24 +1592,23 @@ export class LspMcpServer {
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
-    this.toolHandlers.set('get_code_completions', this.handleGetCodeCompletions.bind(this));
-    this.toolHandlers.set('get_document_colors', this.handleGetDocumentColors.bind(this));
-    this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
-    this.toolHandlers.set('get_document_inlay_hints', this.handleGetDocumentInlayHints.bind(this));
-    this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
-    this.toolHandlers.set('get_document_range_format', this.handleGetDocumentRangeFormat.bind(this));
-    this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
+    this.toolHandlers.set('get_colors', this.handleGetColors.bind(this));
+    this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
+    this.toolHandlers.set('get_format', this.handleGetFormat.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_incoming_calls', this.handleGetIncomingCalls.bind(this));
     this.toolHandlers.set('get_inlay_hint', this.handleGetInlayHint.bind(this));
+    this.toolHandlers.set('get_inlay_hints', this.handleGetInlayHints.bind(this));
     this.toolHandlers.set('get_linked_editing_range', this.handleGetLinkedEditingRange.bind(this));
+    this.toolHandlers.set('get_links', this.handleGetLinks.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
+    this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
     this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
-    this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));
+    this.toolHandlers.set('get_signature', this.handleGetSignature.bind(this));
     this.toolHandlers.set('get_subtypes', this.handleGetSubtypes.bind(this));
     this.toolHandlers.set('get_supertypes', this.handleGetSupertypes.bind(this));
     this.toolHandlers.set('get_symbol_definitions', this.handleGetSymbolDefinitions.bind(this));
@@ -1618,6 +1617,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
     this.toolHandlers.set('get_type_hierarchy', this.handleGetTypeHierarchy.bind(this));
+    this.toolHandlers.set('get_workspace_symbols', this.handleGetWorkspaceSymbols.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
