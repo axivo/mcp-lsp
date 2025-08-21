@@ -25,6 +25,7 @@ import {
   CodeActionRequest,
   CompletionRequest,
   DefinitionRequest,
+  DocumentColorRequest,
   DocumentFormattingRequest,
   DocumentLinkRequest,
   DocumentRangeFormattingRequest,
@@ -35,10 +36,14 @@ import {
   InlayHintParams,
   InlayHintRequest,
   InlayHintResolveRequest,
+  LinkedEditingRangeParams,
+  LinkedEditingRangeRequest,
   ReferenceParams,
   ReferencesRequest,
   RenameParams,
   RenameRequest,
+  SelectionRangeParams,
+  SelectionRangeRequest,
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
@@ -70,6 +75,10 @@ interface GetCodeCompletionsArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetDocumentColorsArgs {
+  file_path: string;
 }
 
 interface GetDocumentFormatArgs {
@@ -124,8 +133,20 @@ interface GetInlayHintArgs {
   item: any;
 }
 
+interface GetLinkedEditingRangeArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
+
 interface GetOutgoingCallsArgs {
   item: any;
+}
+
+interface GetSelectionRangeArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface GetServerProjectsArgs {
@@ -292,6 +313,26 @@ export class LspMcpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document colors
+   * 
+   * @private
+   * @returns {Tool} Document colors tool
+   */
+  private getDocumentColorsTool(): Tool {
+    return {
+      name: 'get_document_colors',
+      description: 'Get color information from a document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
       }
     };
   }
@@ -509,6 +550,28 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for getting linked editing range
+   * 
+   * @private
+   * @returns {Tool} Linked editing range tool
+   */
+  private getLinkedEditingRangeTool(): Tool {
+    return {
+      name: 'get_linked_editing_range',
+      description: 'Find ranges that should be edited together',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting outgoing calls
    * 
    * @private
@@ -524,6 +587,28 @@ export class LspMcpServer {
           item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
         },
         required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting selection range
+   * 
+   * @private
+   * @returns {Tool} Selection range tool
+   */
+  private getSelectionRangeTool(): Tool {
+    return {
+      name: 'get_selection_range',
+      description: 'Smart text selection expansion',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
     };
   }
@@ -730,6 +815,7 @@ export class LspMcpServer {
       this.getCallHierarchyTool(),
       this.getCodeActionsTool(),
       this.getCodeCompletionsTool(),
+      this.getDocumentColorsTool(),
       this.getDocumentFormatTool(),
       this.getDocumentInlayHintsTool(),
       this.getDocumentLinksTool(),
@@ -740,7 +826,9 @@ export class LspMcpServer {
       this.getImplementationsTool(),
       this.getIncomingCallsTool(),
       this.getInlayHintTool(),
+      this.getLinkedEditingRangeTool(),
       this.getOutgoingCallsTool(),
+      this.getSelectionRangeTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSignatureHelpTool(),
@@ -864,6 +952,24 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get document colors tool requests
+   * 
+   * @private
+   * @param {GetDocumentColorsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentColors(args: GetDocumentColorsArgs): Promise<any> {
+    if (!args.file_path) {
+      return 'Missing required argument: file_path';
+    }
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get document format tool requests
    * 
    * @private
@@ -875,13 +981,8 @@ export class LspMcpServer {
       return 'Missing required argument: file_path';
     }
     const params = {
-      textDocument: {
-        uri: `file://${args.file_path}`
-      },
-      options: {
-        tabSize: 2,
-        insertSpaces: true
-      }
+      textDocument: { uri: `file://${args.file_path}` },
+      options: { tabSize: 2, insertSpaces: true }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
     return result;
@@ -922,9 +1023,7 @@ export class LspMcpServer {
       return 'Missing required argument: file_path';
     }
     const params = {
-      textDocument: {
-        uri: `file://${args.file_path}`
-      }
+      textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
     return result;
@@ -947,13 +1046,8 @@ export class LspMcpServer {
         start: { character: args.start_character, line: args.start_line },
         end: { character: args.end_character, line: args.end_line }
       },
-      textDocument: {
-        uri: `file://${args.file_path}`
-      },
-      options: {
-        tabSize: 2,
-        insertSpaces: true
-      }
+      textDocument: { uri: `file://${args.file_path}` },
+      options: { tabSize: 2, insertSpaces: true }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
     return result;
@@ -971,9 +1065,7 @@ export class LspMcpServer {
       return 'Missing required argument: file_path';
     }
     const params = {
-      textDocument: {
-        uri: `file://${args.file_path}`
-      }
+      textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
     return result;
@@ -991,9 +1083,7 @@ export class LspMcpServer {
       return 'Missing required argument: file_path';
     }
     const params = {
-      textDocument: {
-        uri: `file://${args.file_path}`
-      }
+      textDocument: { uri: `file://${args.file_path}` }
     };
     const result = await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
     return result;
@@ -1075,6 +1165,25 @@ export class LspMcpServer {
   }
 
   /**
+   * Handles get linked editing range tool requests
+   * 
+   * @private
+   * @param {GetLinkedEditingRangeArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetLinkedEditingRange(args: GetLinkedEditingRangeArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: LinkedEditingRangeParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get outgoing calls tool requests
    * 
    * @private
@@ -1093,6 +1202,25 @@ export class LspMcpServer {
       return 'Invalid call hierarchy item: missing URI';
     }
     const result = await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get selection range tool requests
+   * 
+   * @private
+   * @param {GetSelectionRangeArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSelectionRange(args: GetSelectionRangeArgs): Promise<any> {
+    if (!args.file_path || args.character === undefined || args.line === undefined) {
+      return 'Missing required arguments: character, file_path, and line';
+    }
+    const params: SelectionRangeParams = {
+      positions: [{ character: args.character, line: args.line }],
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
     return result;
   }
 
@@ -1465,6 +1593,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_code_completions', this.handleGetCodeCompletions.bind(this));
+    this.toolHandlers.set('get_document_colors', this.handleGetDocumentColors.bind(this));
     this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
     this.toolHandlers.set('get_document_inlay_hints', this.handleGetDocumentInlayHints.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
@@ -1475,7 +1604,9 @@ export class LspMcpServer {
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_incoming_calls', this.handleGetIncomingCalls.bind(this));
     this.toolHandlers.set('get_inlay_hint', this.handleGetInlayHint.bind(this));
+    this.toolHandlers.set('get_linked_editing_range', this.handleGetLinkedEditingRange.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
+    this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_signature_help', this.handleGetSignatureHelp.bind(this));
