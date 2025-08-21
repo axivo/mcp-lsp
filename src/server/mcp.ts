@@ -32,6 +32,9 @@ import {
   FoldingRangeRequest,
   HoverRequest,
   ImplementationRequest,
+  InlayHintParams,
+  InlayHintRequest,
+  InlayHintResolveRequest,
   ReferenceParams,
   ReferencesRequest,
   RenameParams,
@@ -73,6 +76,14 @@ interface GetDocumentFormatArgs {
   file_path: string;
 }
 
+interface GetDocumentInlayHintsArgs {
+  end_character: number;
+  end_line: number;
+  file_path: string;
+  start_character: number;
+  start_line: number;
+}
+
 interface GetDocumentLinksArgs {
   file_path: string;
 }
@@ -106,6 +117,10 @@ interface GetImplementationsArgs {
 }
 
 interface GetIncomingCallsArgs {
+  item: any;
+}
+
+interface GetInlayHintArgs {
   item: any;
 }
 
@@ -302,6 +317,30 @@ export class LspMcpServer {
   }
 
   /**
+   * Tool definition for getting document inlay hints
+   * 
+   * @private
+   * @returns {Tool} Document inlay hints tool
+   */
+  private getDocumentInlayHintsTool(): Tool {
+    return {
+      name: 'get_document_inlay_hints',
+      description: 'Get inlay hints for a document range',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting document links
    * 
    * @private
@@ -443,6 +482,26 @@ export class LspMcpServer {
         type: 'object',
         properties: {
           item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting inlay hint details
+   * 
+   * @private
+   * @returns {Tool} Inlay hint details tool
+   */
+  private getInlayHintTool(): Tool {
+    return {
+      name: 'get_inlay_hint',
+      description: 'Get detailed information for an inlay hint item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Inlay hint item from get_document_inlay_hints' }
         },
         required: ['item']
       }
@@ -672,6 +731,7 @@ export class LspMcpServer {
       this.getCodeActionsTool(),
       this.getCodeCompletionsTool(),
       this.getDocumentFormatTool(),
+      this.getDocumentInlayHintsTool(),
       this.getDocumentLinksTool(),
       this.getDocumentRangeFormatTool(),
       this.getDocumentSymbolsTool(),
@@ -679,6 +739,7 @@ export class LspMcpServer {
       this.getHoverTool(),
       this.getImplementationsTool(),
       this.getIncomingCallsTool(),
+      this.getInlayHintTool(),
       this.getOutgoingCallsTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
@@ -823,6 +884,29 @@ export class LspMcpServer {
       }
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get document inlay hints tool requests
+   * 
+   * @private
+   * @param {GetDocumentInlayHintsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetDocumentInlayHints(args: GetDocumentInlayHintsArgs): Promise<any> {
+    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
+      args.end_line === undefined || args.end_character === undefined) {
+      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
+    }
+    const params: InlayHintParams = {
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const result = await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
     return result;
   }
 
@@ -972,6 +1056,21 @@ export class LspMcpServer {
       return 'Invalid call hierarchy item: missing URI';
     }
     const result = await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
+    return result;
+  }
+
+  /**
+   * Handles get inlay hint tool requests
+   * 
+   * @private
+   * @param {GetInlayHintArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetInlayHint(args: GetInlayHintArgs): Promise<any> {
+    if (!args.item) {
+      return 'Missing required argument: item';
+    }
+    const result = await this.client.sendServerRequest('', InlayHintResolveRequest.method, args.item);
     return result;
   }
 
@@ -1367,6 +1466,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
     this.toolHandlers.set('get_code_completions', this.handleGetCodeCompletions.bind(this));
     this.toolHandlers.set('get_document_format', this.handleGetDocumentFormat.bind(this));
+    this.toolHandlers.set('get_document_inlay_hints', this.handleGetDocumentInlayHints.bind(this));
     this.toolHandlers.set('get_document_links', this.handleGetDocumentLinks.bind(this));
     this.toolHandlers.set('get_document_range_format', this.handleGetDocumentRangeFormat.bind(this));
     this.toolHandlers.set('get_document_symbols', this.handleGetDocumentSymbols.bind(this));
@@ -1374,6 +1474,7 @@ export class LspMcpServer {
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_incoming_calls', this.handleGetIncomingCalls.bind(this));
+    this.toolHandlers.set('get_inlay_hint', this.handleGetInlayHint.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
