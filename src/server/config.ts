@@ -12,11 +12,19 @@ interface Config {
   servers: Record<string, ServerConfig>;
 }
 
+export interface ProjectConfig {
+  name: string;
+  description: string;
+  url?: string;
+  ignore: string[];
+  path: string;
+}
+
 interface ServerConfig {
   command: string;
   args: string[];
   extensions: string[];
-  projects: Record<string, string>;
+  projects: ProjectConfig[];
 }
 
 /**
@@ -90,14 +98,23 @@ export class LspConfigParser {
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
         return false;
       }
-      if (!serverConfig.projects || typeof serverConfig.projects !== 'object' || Object.keys(serverConfig.projects).length === 0) {
+      if (!Array.isArray(serverConfig.projects) || serverConfig.projects.length === 0) {
         return false;
       }
-      for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
-        if (typeof projectName !== 'string' || projectName.trim() === '') {
+      for (const project of serverConfig.projects) {
+        if (!project || typeof project !== 'object') {
           return false;
         }
-        if (typeof projectPath !== 'string' || projectPath.trim() === '') {
+        if (typeof project.name !== 'string' || project.name.trim() === '') {
+          return false;
+        }
+        if (typeof project.description !== 'string' || project.description.trim() === '') {
+          return false;
+        }
+        if (!Array.isArray(project.ignore)) {
+          return false;
+        }
+        if (typeof project.path !== 'string' || project.path.trim() === '') {
           return false;
         }
       }
@@ -124,7 +141,7 @@ export class LspConfigParser {
     command: string;
     args: string[];
     extensions: string[];
-    projects: Record<string, string>;
+    projects: ProjectConfig[];
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
@@ -132,7 +149,7 @@ export class LspConfigParser {
         command: '',
         args: [],
         extensions: [],
-        projects: {}
+        projects: []
       };
     }
     return {

@@ -57,20 +57,6 @@ import {
 } from 'vscode-languageserver-protocol';
 import { LspConfigParser } from './config.js';
 
-const ignoredDirs = [
-  'bin',
-  'build',
-  'cache',
-  'coverage',
-  'dist',
-  'log',
-  'node_modules',
-  'obj',
-  'out',
-  'target',
-  'temp'
-];
-
 interface ServerConnection {
   connection: MessageConnection;
   process: ChildProcess;
@@ -92,6 +78,9 @@ export class LspClient {
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
   private projectFiles: Map<string, Map<string, string[]>> = new Map();
+  private readonly IGNORE = [
+    'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp'
+  ];
   private readonly RATE_LIMIT_MAX_REQUESTS = 100;
   private readonly RATE_LIMIT_WINDOW = 60000;
 
@@ -161,7 +150,7 @@ export class LspClient {
     const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
     for (const [languageId, _] of this.connections) {
       const serverConfig = this.config.getServerConfig(languageId);
-      const isProjectPath = Object.values(serverConfig.projects).some(path => absolutePath.startsWith(path));
+      const isProjectPath = serverConfig.projects.some(project => absolutePath.startsWith(project.path));
       if (isProjectPath) {
         for (const ext of serverConfig.extensions) {
           if (filePath.endsWith(ext)) {
@@ -171,6 +160,30 @@ export class LspClient {
       }
     }
     return null;
+  }
+
+  /**
+   * Finds all files with specified extensions using fast glob search
+   * 
+   * @private
+   * @param {string} dir - Directory to search
+   * @param {string[]} extensions - File extensions
+   * @param {string[]} ignore - Additional ignore patterns
+   * @returns {Promise<string[]>} Array of matching file paths
+   */
+  private async findFiles(dir: string, extensions: string[], ignore: string[] = []): Promise<string[]> {
+    if (extensions.length === 0) {
+      return [];
+    }
+    const defaultIgnore = ['**/.*/**', ...this.IGNORE.map(pattern => `**/${pattern}/**`)];
+    const projectIgnore = ignore.map(pattern => pattern.includes('/') ? pattern : `**/${pattern}/**`);
+    const files = await fg(`**/*{${extensions.join(',')}}`, {
+      absolute: true,
+      cwd: dir,
+      ignore: [...defaultIgnore, ...projectIgnore],
+      onlyFiles: true
+    });
+    return files;
   }
 
   /**
@@ -185,9 +198,9 @@ export class LspClient {
       return;
     }
     const serverConfig = this.config.getServerConfig(languageId);
-    const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
-      name,
-      uri: pathToFileURL(path).toString()
+    const workspaceFolders: WorkspaceFolder[] = serverConfig.projects.map(project => ({
+      name: project.name,
+      uri: pathToFileURL(project.path).toString()
     }));
     if (workspaceFolders.length > 0) {
       this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
@@ -201,27 +214,6 @@ export class LspClient {
   }
 
   /**
-   * Finds all files with specified extensions using fast glob search
-   * 
-   * @private
-   * @param {string} dir - Directory to search
-   * @param {string[]} extensions - File extensions
-   * @returns {Promise<string[]>} Array of matching file paths
-   */
-  private async findFiles(dir: string, extensions: string[]): Promise<string[]> {
-    if (extensions.length === 0) {
-      return [];
-    }
-    const files = await fg(`**/*{${extensions.join(',')}}`, {
-      absolute: true,
-      cwd: dir,
-      ignore: ['**/.*/**', ...ignoredDirs.map(ignored => `**/${ignored}/**`)],
-      onlyFiles: true
-    });
-    return files;
-  }
-
-  /**
    * Initializes an language server with the initialize request
    * 
    * @private
@@ -230,12 +222,12 @@ export class LspClient {
    */
   private async initializeServer(languageId: string): Promise<void> {
     const serverConfig = this.config.getServerConfig(languageId);
-    const workspaceFolders: WorkspaceFolder[] = Object.entries(serverConfig.projects).map(([name, path]) => ({
-      name,
-      uri: pathToFileURL(path).toString()
+    const workspaceFolders: WorkspaceFolder[] = serverConfig.projects.map(project => ({
+      name: project.name,
+      uri: pathToFileURL(project.path).toString()
     }));
-    const projects = Object.values(serverConfig.projects);
-    const rootPath = projects.length === 1 ? projects[0] : null;
+    const paths = serverConfig.projects.map(project => project.path);
+    const rootPath = paths.length === 1 ? paths[0] : null;
     const rootUri = rootPath ? pathToFileURL(rootPath).toString() : null;
     const initParams: InitializeParams = {
       capabilities: this.setClientCapabilities(),
@@ -252,11 +244,11 @@ export class LspClient {
     await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
     const cachedFiles = new Map<string, string[]>();
-    for (const [name, path] of Object.entries(serverConfig.projects)) {
-      const files = await this.findFiles(path, serverConfig.extensions);
+    for (const project of serverConfig.projects) {
+      const files = await this.findFiles(project.path, serverConfig.extensions, project.ignore);
       if (files.length > 0) {
         await this.openFiles([files[0]], languageId);
-        cachedFiles.set(name, files);
+        cachedFiles.set(project.name, files);
       }
     }
     this.projectFiles.set(languageId, cachedFiles);
@@ -360,6 +352,15 @@ export class LspClient {
   }
 
   /**
+   * Gets all configured servers
+   * 
+   * @returns {string[]} Array of servers
+   */
+  getServers(): string[] {
+    return this.config.getServers();
+  }
+
+  /**
    * Gets the uptime of a specific language server in milliseconds
    * 
    * @param {string} languageId - Language identifier
@@ -368,15 +369,6 @@ export class LspClient {
   getServerUptime(languageId: string): number {
     const startTime = this.serverStartTimes.get(languageId);
     return startTime ? Date.now() - startTime : 0;
-  }
-
-  /**
-   * Gets all configured servers
-   * 
-   * @returns {string[]} Array of servers
-   */
-  getServers(): string[] {
-    return this.config.getServers();
   }
 
   /**
@@ -524,9 +516,9 @@ export class LspClient {
       const cachedFiles = this.projectFiles.get(languageId);
       if (cachedFiles) {
         const serverConfig = this.config.getServerConfig(languageId);
-        for (const [projectName, projectPath] of Object.entries(serverConfig.projects)) {
-          if (absolutePath.startsWith(projectPath)) {
-            const projectFiles = cachedFiles.get(projectName) || [];
+        for (const project of serverConfig.projects) {
+          if (absolutePath.startsWith(project.path)) {
+            const projectFiles = cachedFiles.get(project.name) || [];
             await this.openFiles(projectFiles, languageId);
             break;
           }
@@ -560,7 +552,7 @@ export class LspClient {
     }
     const serverConfig = this.config.getServerConfig(languageId);
     try {
-      const projectPaths = Object.values(serverConfig.projects);
+      const projectPaths = serverConfig.projects.map(project => project.path);
       const workspaceRoot = projectPaths.length > 0 ? projectPaths[0] : process.cwd();
       const childProcess = spawn(serverConfig.command, serverConfig.args, {
         cwd: workspaceRoot,

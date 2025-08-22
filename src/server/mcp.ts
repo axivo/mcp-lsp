@@ -1252,15 +1252,17 @@ export class LspMcpServer {
       return 'Missing required argument: language_id';
     }
     if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured`;
+      return `Language server '${args.language_id}' is not configured.`;
     }
     if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running`;
+      return `Language server '${args.language_id}' is not running.`;
     }
     const serverConfig = this.config.getServerConfig(args.language_id);
-    const projects = Object.entries(serverConfig.projects).map(([name, path]) => ({
-      project_name: name,
-      path: path,
+    const projects = serverConfig.projects.map(project => ({
+      project_name: project.name,
+      description: project.description,
+      url: project.url,
+      path: project.path,
       extensions: serverConfig.extensions
     }));
     return projects;
@@ -1589,14 +1591,8 @@ export class LspMcpServer {
    * @private
    */
   private setupHandlers(): void {
-    this.server.setRequestHandler(
-      CallToolRequestSchema,
-      this.handleRequest.bind(this)
-    );
-    this.server.setRequestHandler(
-      ListToolsRequestSchema,
-      this.handleTools.bind(this)
-    );
+    this.server.setRequestHandler(CallToolRequestSchema, this.handleRequest.bind(this));
+    this.server.setRequestHandler(ListToolsRequestSchema, this.handleTools.bind(this));
   }
 
   /**
