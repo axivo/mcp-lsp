@@ -23,6 +23,7 @@ export interface ProjectConfig {
 interface ServerConfig {
   command: string;
   args: string[];
+  configuration?: Record<string, any>;
   extensions: string[];
   projects: ProjectConfig[];
 }
@@ -95,6 +96,9 @@ export class LspConfigParser {
       if (!Array.isArray(serverConfig.args)) {
         return false;
       }
+      if (serverConfig.configuration !== undefined && (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))) {
+        return false;
+      }
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
         return false;
       }
@@ -140,6 +144,7 @@ export class LspConfigParser {
   getServerConfig(languageId: string): {
     command: string;
     args: string[];
+    configuration?: Record<string, any>;
     extensions: string[];
     projects: ProjectConfig[];
   } {
@@ -148,6 +153,7 @@ export class LspConfigParser {
       return {
         command: '',
         args: [],
+        configuration: undefined,
         extensions: [],
         projects: []
       };
@@ -155,6 +161,7 @@ export class LspConfigParser {
     return {
       command: serverConfig.command,
       args: serverConfig.args,
+      configuration: serverConfig.configuration,
       extensions: serverConfig.extensions,
       projects: serverConfig.projects
     };

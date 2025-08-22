@@ -1263,6 +1263,7 @@ export class LspMcpServer {
       description: project.description,
       url: project.url,
       path: project.path,
+      configuration: serverConfig.configuration,
       extensions: serverConfig.extensions
     }));
     return projects;

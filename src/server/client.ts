@@ -25,6 +25,7 @@ import {
   ClientCapabilities,
   CodeActionRequest,
   CompletionRequest,
+  ConfigurationRequest,
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
@@ -43,6 +44,8 @@ import {
   InlayHintRequest,
   LinkedEditingRangeRequest,
   ReferencesRequest,
+  RegistrationParams,
+  RegistrationRequest,
   RenameRequest,
   SelectionRangeRequest,
   ShutdownRequest,
@@ -52,6 +55,8 @@ import {
   TypeHierarchyPrepareRequest,
   TypeHierarchySubtypesRequest,
   TypeHierarchySupertypesRequest,
+  UnregistrationParams,
+  UnregistrationRequest,
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
@@ -123,15 +128,31 @@ export class LspClient {
    * Creates a message connection for an language server process
    * 
    * @private
+   * @param {string} languageId - Language identifier
    * @param {ChildProcess} process - Language server process
    * @returns {MessageConnection} Message connection
    */
-  private createConnection(process: ChildProcess): MessageConnection {
+  private createConnection(languageId: string, process: ChildProcess): MessageConnection {
     const connection = createMessageConnection(
       new StreamMessageReader(process.stdout!),
       new StreamMessageWriter(process.stdin!)
     );
     connection.onError(() => { });
+    connection.onRequest(ConfigurationRequest.method, (params: any) => {
+      return params.items.map((item: any) => {
+        const serverConfig = this.config.getServerConfig(languageId);
+        if (item.section === languageId && serverConfig.configuration) {
+          return serverConfig.configuration;
+        }
+        return null;
+      });
+    });
+    connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
+      return null;
+    });
+    connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
+      return null;
+    });
     connection.listen();
     return connection;
   }
@@ -247,7 +268,7 @@ export class LspClient {
     for (const project of serverConfig.projects) {
       const files = await this.findFiles(project.path, serverConfig.extensions, project.ignore);
       if (files.length > 0) {
-        await this.openFiles([files[0]], languageId);
+        await this.openFiles(languageId, [files[0]]);
         cachedFiles.set(project.name, files);
       }
     }
@@ -258,11 +279,11 @@ export class LspClient {
    * Opens multiple files in the language server
    * 
    * @private
-   * @param {string[]} files - File paths to open
    * @param {string} languageId - Language identifier
+   * @param {string[]} files - File paths to open
    * @returns {Promise<void>} Promise that resolves when all files are opened
    */
-  private async openFiles(files: string[], languageId: string): Promise<void> {
+  private async openFiles(languageId: string, files: string[]): Promise<void> {
     if (files.length === 0) {
       return;
     }
@@ -321,14 +342,30 @@ export class LspClient {
         implementation: { dynamicRegistration: false },
         inlayHint: { dynamicRegistration: false },
         linkedEditingRange: { dynamicRegistration: false },
+        publishDiagnostics: {
+          codeDescriptionSupport: true,
+          dataSupport: true,
+          relatedInformation: true,
+          versionSupport: true
+        },
         rangeFormatting: { dynamicRegistration: false },
         references: { dynamicRegistration: false },
         rename: { dynamicRegistration: false },
         selectionRange: { dynamicRegistration: false },
         signatureHelp: { dynamicRegistration: false },
-        synchronization: { dynamicRegistration: false },
+        synchronization: {
+          didSave: true,
+          dynamicRegistration: false,
+          willSave: true,
+          willSaveWaitUntil: true
+        },
         typeDefinition: { dynamicRegistration: false },
         typeHierarchy: { dynamicRegistration: false }
+      },
+      window: {
+        showDocument: { support: false },
+        showMessage: { messageActionItem: { additionalPropertiesSupport: false } },
+        workDoneProgress: true
       }
     };
   }
@@ -341,11 +378,11 @@ export class LspClient {
    * @param {ChildProcess} process - Language server process
    */
   private setProcessHandlers(languageId: string, process: ChildProcess): void {
-    process.on('error', () => {
+    process.on('error', (error) => {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
-    process.on('exit', (code) => {
+    process.on('exit', (code, signal) => {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
@@ -392,7 +429,7 @@ export class LspClient {
     const cachedFiles = this.projectFiles.get(languageId);
     if (cachedFiles) {
       const projectFiles = cachedFiles.get(projectName) || [];
-      await this.openFiles(projectFiles, languageId);
+      await this.openFiles(languageId, projectFiles);
     }
   }
 
@@ -519,7 +556,7 @@ export class LspClient {
         for (const project of serverConfig.projects) {
           if (absolutePath.startsWith(project.path)) {
             const projectFiles = cachedFiles.get(project.name) || [];
-            await this.openFiles(projectFiles, languageId);
+            await this.openFiles(languageId, projectFiles);
             break;
           }
         }
@@ -562,7 +599,7 @@ export class LspClient {
       if (!childProcess.stdout || !childProcess.stdin || !childProcess.stderr) {
         return this.response(`Failed to create stdio pipes for '${languageId}' language server`);
       }
-      const connection = this.createConnection(childProcess);
+      const connection = this.createConnection(languageId, childProcess);
       const serverConnection: ServerConnection = {
         connection,
         initialized: false,
