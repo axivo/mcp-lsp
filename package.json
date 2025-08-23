@@ -29,10 +29,13 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.17.0",
     "fast-glob": "^3.3.0",
+    "graceful-fs": "^4.2.0",
+    "p-limit": "^7.1.0",
     "vscode-jsonrpc": "^8.2.0",
     "vscode-languageserver-protocol": "^3.17.0"
   },
   "devDependencies": {
+    "@types/graceful-fs": "^4.1.0",
     "@types/node": "^24.0.0",
     "typescript": ">=5.0.0"
   },

@@ -8,10 +8,11 @@
 
 import { ChildProcess, spawn } from 'child_process';
 import fg from 'fast-glob';
-import { readFileSync } from 'fs';
-import { pathToFileURL } from 'node:url';
+import gracefulFs from 'graceful-fs';
+import pLimit from 'p-limit';
 import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
+import { fileURLToPath, pathToFileURL } from 'url';
+import { promisify } from 'util';
 import {
   createMessageConnection,
   MessageConnection,
@@ -84,6 +85,9 @@ export class LspClient {
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
   private projectFiles: Map<string, Map<string, string[]>> = new Map();
+  private readonly fileReadLimit = pLimit(10);
+  private readonly readFileAsync = promisify(gracefulFs.readFile);
+  private readonly readFileSync = gracefulFs.readFileSync;
   private readonly IGNORE = [
     'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp'
   ];
@@ -294,6 +298,32 @@ export class LspClient {
   }
 
   /**
+   * Opens a single file in the language server
+   * 
+   * @private
+   * @param {string} languageId - Language identifier
+   * @param {string} filePath - File path to open
+   * @returns {Promise<void>} Promise that resolves when file is opened
+   */
+  private async openFile(languageId: string, filePath: string): Promise<void> {
+    try {
+      const text = await this.readFileAsync(filePath, 'utf8');
+      const uri = pathToFileURL(filePath).toString();
+      const textDocument: TextDocumentItem = {
+        languageId,
+        uri,
+        text,
+        version: 1
+      };
+      this.sendNotification(languageId, DidOpenTextDocumentNotification.method, {
+        textDocument
+      });
+    } catch (error) {
+      return this.response(`Failed to read '${filePath}' file: ${error}`);
+    }
+  }
+
+  /**
    * Opens multiple files in the language server
    * 
    * @private
@@ -305,18 +335,10 @@ export class LspClient {
     if (files.length === 0) {
       return;
     }
-    const open = files.map(async (file) => {
-      const uri = pathToFileURL(file).toString();
-      const text = readFileSync(file, 'utf8');
-      const textDocument: TextDocumentItem = {
-        uri,
-        languageId,
-        version: 1,
-        text
-      };
-      this.sendNotification(languageId, DidOpenTextDocumentNotification.method, { textDocument });
-    });
-    await Promise.allSettled(open);
+    const openFiles = files.map(file =>
+      this.fileReadLimit(() => this.openFile(languageId, file))
+    );
+    await Promise.allSettled(openFiles);
   }
 
   /**
@@ -678,7 +700,7 @@ export class LspClient {
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
       const packagePath = join(__dirname, '../../package.json');
-      const packageJson = JSON.parse(readFileSync(packagePath, 'utf8'));
+      const packageJson = JSON.parse(this.readFileSync(packagePath, 'utf8'));
       return packageJson.version;
     } catch (error) {
       return this.response(`Failed to read package.json version: ${error}`);
