@@ -80,6 +80,7 @@ export class LspClient {
   private config: LspConfigParser;
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
+  private languageIdCache = new Map<string, string>();
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
   private projectFiles: Map<string, Map<string, string[]>> = new Map();
@@ -113,7 +114,8 @@ export class LspClient {
     const key = `${languageId}_${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
     const current = this.rateLimiter.get(key) || 0;
     if (current >= this.RATE_LIMIT_MAX_REQUESTS) {
-      return this.response(`Rate limit exceeded for '${languageId}' language server.`);
+      this.response(`Rate limit exceeded for '${languageId}' language server.`);
+      return false;
     }
     this.rateLimiter.set(key, current + 1);
     for (const [k, _] of this.rateLimiter) {
@@ -142,16 +144,16 @@ export class LspClient {
       return params.items.map((item: any) => {
         const serverConfig = this.config.getServerConfig(languageId);
         if (item.section === languageId && serverConfig.configuration) {
-          return serverConfig.configuration;
+          return { [languageId]: serverConfig.configuration };
         }
-        return null;
+        return {};
       });
     });
     connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
-      return null;
+      return {};
     });
     connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
-      return null;
+      return {};
     });
     connection.listen();
     return connection;
@@ -165,16 +167,18 @@ export class LspClient {
    * @returns {string} Language identifier of the running server that handles the file
    */
   private getServerInfo(filePath: string): string | null {
-    if (this.connections.size === 0) {
-      return null;
-    }
     const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
-    for (const [languageId, _] of this.connections) {
+    const cachedLanguageId = this.languageIdCache.get(absolutePath);
+    if (cachedLanguageId) {
+      return cachedLanguageId;
+    }
+    for (const languageId of this.config.getServers()) {
       const serverConfig = this.config.getServerConfig(languageId);
       const isProjectPath = serverConfig.projects.some(project => absolutePath.startsWith(project.path));
       if (isProjectPath) {
         for (const ext of serverConfig.extensions) {
           if (filePath.endsWith(ext)) {
+            this.languageIdCache.set(absolutePath, languageId);
             return languageId;
           }
         }
@@ -196,15 +200,15 @@ export class LspClient {
     if (extensions.length === 0) {
       return [];
     }
-    const defaultIgnore = ['**/.*/**', ...this.IGNORE.map(pattern => `**/${pattern}/**`)];
-    const projectIgnore = ignore.map(pattern => pattern.includes('/') ? pattern : `**/${pattern}/**`);
-    const files = await fg(`**/*{${extensions.join(',')}}`, {
+    const defaultIgnore = ['**/.*', ...this.IGNORE.map(pattern => `**/${pattern}`)];
+    const projectIgnore = ignore.map(pattern => pattern.includes('/') ? pattern : `**/${pattern}`);
+    const pattern = extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`;
+    return await fg(pattern, {
       absolute: true,
       cwd: dir,
       ignore: [...defaultIgnore, ...projectIgnore],
       onlyFiles: true
     });
-    return files;
   }
 
   /**
@@ -223,7 +227,7 @@ export class LspClient {
       name: project.name,
       uri: pathToFileURL(project.path).toString()
     }));
-    if (workspaceFolders.length > 0) {
+    if (workspaceFolders.length) {
       this.sendNotification(languageId, DidChangeWorkspaceFoldersNotification.method, {
         event: {
           added: workspaceFolders,
@@ -253,7 +257,7 @@ export class LspClient {
     const initParams: InitializeParams = {
       capabilities: this.setClientCapabilities(),
       clientInfo: {
-        name: 'mcp-lsp',
+        name: 'mcp-lsp-client',
         version: this.version(),
       },
       processId: process.pid,
@@ -267,12 +271,26 @@ export class LspClient {
     const cachedFiles = new Map<string, string[]>();
     for (const project of serverConfig.projects) {
       const files = await this.findFiles(project.path, serverConfig.extensions, project.ignore);
-      if (files.length > 0) {
+      if (files.length) {
+        files.forEach(filePath => {
+          this.languageIdCache.set(filePath, languageId);
+        });
         await this.openFiles(languageId, [files[0]]);
         cachedFiles.set(project.name, files);
       }
     }
     this.projectFiles.set(languageId, cachedFiles);
+    try {
+      if (cachedFiles.size && serverConfig.workspace === false) {
+        serverConnection.initialized = true;
+      } else {
+        const params = { query: '' };
+        await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+        serverConnection.initialized = true;
+      }
+    } catch (error) {
+      serverConnection.initialized = false;
+    }
   }
 
   /**
@@ -312,11 +330,11 @@ export class LspClient {
       workspace: {
         applyEdit: true,
         configuration: true,
-        didChangeConfiguration: { dynamicRegistration: false },
-        didChangeWatchedFiles: { dynamicRegistration: false },
-        executeCommand: { dynamicRegistration: false },
+        didChangeConfiguration: { dynamicRegistration: true },
+        didChangeWatchedFiles: { dynamicRegistration: true },
+        executeCommand: { dynamicRegistration: true },
         symbol: {
-          dynamicRegistration: false,
+          dynamicRegistration: true,
           symbolKind: {
             valueSet: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
           }
@@ -329,43 +347,27 @@ export class LspClient {
         workspaceFolders: true
       },
       textDocument: {
-        callHierarchy: { dynamicRegistration: false },
-        codeAction: { dynamicRegistration: false },
-        completion: { dynamicRegistration: false },
-        colorProvider: { dynamicRegistration: false },
-        definition: { dynamicRegistration: false },
-        documentLink: { dynamicRegistration: false },
-        documentSymbol: { dynamicRegistration: false },
-        foldingRange: { dynamicRegistration: false },
-        formatting: { dynamicRegistration: false },
-        hover: { dynamicRegistration: false },
-        implementation: { dynamicRegistration: false },
-        inlayHint: { dynamicRegistration: false },
-        linkedEditingRange: { dynamicRegistration: false },
-        publishDiagnostics: {
-          codeDescriptionSupport: true,
-          dataSupport: true,
-          relatedInformation: true,
-          versionSupport: true
-        },
-        rangeFormatting: { dynamicRegistration: false },
-        references: { dynamicRegistration: false },
-        rename: { dynamicRegistration: false },
-        selectionRange: { dynamicRegistration: false },
-        signatureHelp: { dynamicRegistration: false },
-        synchronization: {
-          didSave: true,
-          dynamicRegistration: false,
-          willSave: true,
-          willSaveWaitUntil: true
-        },
-        typeDefinition: { dynamicRegistration: false },
-        typeHierarchy: { dynamicRegistration: false }
-      },
-      window: {
-        showDocument: { support: false },
-        showMessage: { messageActionItem: { additionalPropertiesSupport: false } },
-        workDoneProgress: true
+        callHierarchy: { dynamicRegistration: true },
+        codeAction: { dynamicRegistration: true },
+        completion: { dynamicRegistration: true },
+        colorProvider: { dynamicRegistration: true },
+        definition: { dynamicRegistration: true },
+        documentLink: { dynamicRegistration: true },
+        documentSymbol: { dynamicRegistration: true },
+        foldingRange: { dynamicRegistration: true },
+        formatting: { dynamicRegistration: true },
+        hover: { dynamicRegistration: true },
+        implementation: { dynamicRegistration: true },
+        inlayHint: { dynamicRegistration: true },
+        linkedEditingRange: { dynamicRegistration: true },
+        rangeFormatting: { dynamicRegistration: true },
+        references: { dynamicRegistration: true },
+        rename: { dynamicRegistration: true },
+        selectionRange: { dynamicRegistration: true },
+        signatureHelp: { dynamicRegistration: true },
+        synchronization: { dynamicRegistration: true },
+        typeDefinition: { dynamicRegistration: true },
+        typeHierarchy: { dynamicRegistration: true }
       }
     };
   }
@@ -386,6 +388,16 @@ export class LspClient {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
     });
+  }
+
+  /**
+   * Gets server connection for status checking
+   * 
+   * @param {string} languageId - Language identifier
+   * @returns {ServerConnection | undefined} Server connection or undefined
+   */
+  getServerConnection(languageId: string): ServerConnection | undefined {
+    return this.connections.get(languageId);
   }
 
   /**
@@ -590,7 +602,7 @@ export class LspClient {
     const serverConfig = this.config.getServerConfig(languageId);
     try {
       const projectPaths = serverConfig.projects.map(project => project.path);
-      const workspaceRoot = projectPaths.length > 0 ? projectPaths[0] : process.cwd();
+      const workspaceRoot = projectPaths.length ? projectPaths[0] : process.cwd();
       const childProcess = spawn(serverConfig.command, serverConfig.args, {
         cwd: workspaceRoot,
         env: { ...process.env },
@@ -609,7 +621,6 @@ export class LspClient {
       this.serverStartTimes.set(languageId, Date.now());
       this.setProcessHandlers(languageId, childProcess);
       await this.initializeServer(languageId);
-      serverConnection.initialized = true;
     } catch (error) {
       return this.response(`Failed to start '${languageId}' language server: ${error}`);
     }
@@ -629,6 +640,11 @@ export class LspClient {
     this.connections.delete(languageId);
     this.projectFiles.delete(languageId);
     this.serverStartTimes.delete(languageId);
+    for (const [filePath, cachedLanguageId] of this.languageIdCache.entries()) {
+      if (cachedLanguageId === languageId) {
+        this.languageIdCache.delete(filePath);
+      }
+    }
     try {
       await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
       await new Promise(resolve => setTimeout(resolve, 100));

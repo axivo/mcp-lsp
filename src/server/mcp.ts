@@ -1280,13 +1280,12 @@ export class LspMcpServer {
     if (!args.language_id) {
       const status = this.client.getServers().map(async (languageId) => {
         const isServerRunning = this.client.isServerRunning(languageId);
+        const uptime = this.client.getServerUptime(languageId);
         if (!isServerRunning) {
           return [languageId, { status: 'stopped', uptime: 0 }];
         }
-        const params: WorkspaceSymbolParams = { query: '' };
-        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
-        const uptime = this.client.getServerUptime(languageId);
-        if (result.content) {
+        const serverConnection = this.client.getServerConnection(languageId);
+        if (!serverConnection || !serverConnection.initialized) {
           return [languageId, { status: 'starting', uptime }];
         }
         return [languageId, { status: 'ready', uptime }];
@@ -1301,10 +1300,9 @@ export class LspMcpServer {
     if (!isServerRunning) {
       return { status: 'stopped', uptime: 0 };
     }
-    const params: WorkspaceSymbolParams = { query: 'test' };
-    const result = await this.client.sendRequest(args.language_id, WorkspaceSymbolRequest.method, params);
+    const serverConnection = this.client.getServerConnection(args.language_id);
     const uptime = this.client.getServerUptime(args.language_id);
-    if (result.content) {
+    if (!serverConnection || !serverConnection.initialized) {
       return { status: 'starting', uptime };
     }
     return { status: 'ready', uptime };

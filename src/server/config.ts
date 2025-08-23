@@ -26,6 +26,7 @@ interface ServerConfig {
   configuration?: Record<string, any>;
   extensions: string[];
   projects: ProjectConfig[];
+  workspace?: boolean;
 }
 
 /**
@@ -96,7 +97,9 @@ export class LspConfigParser {
       if (!Array.isArray(serverConfig.args)) {
         return false;
       }
-      if (serverConfig.configuration !== undefined && (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))) {
+      if (serverConfig.configuration !== undefined &&
+        (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))
+      ) {
         return false;
       }
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
@@ -147,6 +150,7 @@ export class LspConfigParser {
     configuration?: Record<string, any>;
     extensions: string[];
     projects: ProjectConfig[];
+    workspace?: boolean;
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
@@ -163,7 +167,8 @@ export class LspConfigParser {
       args: serverConfig.args,
       configuration: serverConfig.configuration,
       extensions: serverConfig.extensions,
-      projects: serverConfig.projects
+      projects: serverConfig.projects,
+      workspace: serverConfig.workspace
     };
   }
 
