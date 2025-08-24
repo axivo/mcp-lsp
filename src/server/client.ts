@@ -26,7 +26,6 @@ import {
   ClientCapabilities,
   CodeActionRequest,
   CompletionRequest,
-  ConfigurationRequest,
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
@@ -49,6 +48,7 @@ import {
   RegistrationRequest,
   RenameRequest,
   SelectionRangeRequest,
+  ShowMessageRequest,
   ShutdownRequest,
   SignatureHelpRequest,
   TextDocumentItem,
@@ -82,9 +82,10 @@ export class LspClient {
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
   private languageIdCache = new Map<string, string>();
+  private openedFiles: Map<string, Set<string>> = new Map();
+  private projectFiles: Map<string, Map<string, string[]>> = new Map();
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
-  private projectFiles: Map<string, Map<string, string[]>> = new Map();
   private readonly fileReadLimit = pLimit(10);
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
@@ -144,21 +145,20 @@ export class LspClient {
       new StreamMessageWriter(process.stdin!)
     );
     connection.onError(() => { });
-    connection.onRequest(ConfigurationRequest.method, (params: any) => {
-      return params.items.map((item: any) => {
-        const serverConfig = this.config.getServerConfig(languageId);
-        if (item.section === languageId && serverConfig.configuration) {
-          return { [languageId]: serverConfig.configuration };
-        }
+    const serverConfig = this.config.getServerConfig(languageId);
+    if (serverConfig.settings.message === false) {
+      connection.onRequest(ShowMessageRequest.method, (params: any) => {
+        return null;
+      });
+    }
+    if (serverConfig.settings.registration === false) {
+      connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
         return {};
       });
-    });
-    connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
-      return {};
-    });
-    connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
-      return {};
-    });
+      connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
+        return {};
+      });
+    }
     connection.listen();
     return connection;
   }
@@ -264,6 +264,7 @@ export class LspClient {
         name: 'mcp-lsp-client',
         version: this.version(),
       },
+      initializationOptions: serverConfig.configuration ? { [languageId]: serverConfig.configuration } : {},
       processId: process.pid,
       rootPath,
       rootUri,
@@ -285,7 +286,7 @@ export class LspClient {
     }
     this.projectFiles.set(languageId, cachedFiles);
     try {
-      if (cachedFiles.size && serverConfig.workspace === false) {
+      if (cachedFiles.size && serverConfig.settings.workspace === false) {
         serverConnection.initialized = true;
       } else {
         const params = { query: '' };
@@ -306,9 +307,13 @@ export class LspClient {
    * @returns {Promise<void>} Promise that resolves when file is opened
    */
   private async openFile(languageId: string, filePath: string): Promise<void> {
+    const uri = pathToFileURL(filePath).toString();
+    const openedSet = this.openedFiles.get(languageId) || new Set();
+    if (openedSet.has(uri)) {
+      return;
+    }
     try {
       const text = await this.readFileAsync(filePath, 'utf8');
-      const uri = pathToFileURL(filePath).toString();
       const textDocument: TextDocumentItem = {
         languageId,
         uri,
@@ -318,6 +323,8 @@ export class LspClient {
       this.sendNotification(languageId, DidOpenTextDocumentNotification.method, {
         textDocument
       });
+      openedSet.add(uri);
+      this.openedFiles.set(languageId, openedSet);
     } catch (error) {
       return this.response(`Failed to read '${filePath}' file: ${error}`);
     }
@@ -349,14 +356,70 @@ export class LspClient {
      */
   private setClientCapabilities(): ClientCapabilities {
     return {
+      general: { positionEncodings: ['utf-16', 'utf-8'] },
+      textDocument: {
+        callHierarchy: { dynamicRegistration: false },
+        codeAction: {
+          dataSupport: true,
+          disabledSupport: true,
+          dynamicRegistration: false,
+          isPreferredSupport: true,
+          resolveSupport: { properties: ['edit'] }
+        },
+        completion: {
+          dynamicRegistration: false,
+          completionItem: {
+            deprecatedSupport: true,
+            insertReplaceSupport: true,
+            resolveSupport: { properties: ['additionalTextEdits', 'documentation', 'detail'] },
+            snippetSupport: true,
+            tagSupport: { valueSet: [1] }
+          },
+          completionItemKind: {}
+        },
+        colorProvider: { dynamicRegistration: false },
+        definition: { dynamicRegistration: false },
+        documentLink: { dynamicRegistration: false },
+        documentSymbol: { dynamicRegistration: false },
+        foldingRange: { dynamicRegistration: false },
+        formatting: { dynamicRegistration: false },
+        hover: {
+          dynamicRegistration: false,
+          contentFormat: ['markdown', 'plaintext']
+        },
+        implementation: { dynamicRegistration: false },
+        inlayHint: { dynamicRegistration: false },
+        linkedEditingRange: { dynamicRegistration: false },
+        rangeFormatting: { dynamicRegistration: false },
+        references: { dynamicRegistration: false },
+        rename: { dynamicRegistration: false },
+        selectionRange: { dynamicRegistration: false },
+        signatureHelp: {
+          contextSupport: true,
+          dynamicRegistration: false,
+          signatureInformation: {
+            documentationFormat: ['markdown', 'plaintext'],
+            parameterInformation: { labelOffsetSupport: true },
+            activeParameterSupport: true
+          }
+        },
+        synchronization: {
+          didSave: true,
+          dynamicRegistration: false,
+          willSave: true,
+          willSaveWaitUntil: true
+        },
+        typeDefinition: { dynamicRegistration: false },
+        typeHierarchy: { dynamicRegistration: false }
+      },
       workspace: {
         applyEdit: true,
         configuration: true,
-        didChangeConfiguration: { dynamicRegistration: true },
-        didChangeWatchedFiles: { dynamicRegistration: true },
-        executeCommand: { dynamicRegistration: true },
+        didChangeConfiguration: { dynamicRegistration: false },
+        didChangeWatchedFiles: { dynamicRegistration: false },
+        executeCommand: { dynamicRegistration: false },
         symbol: {
-          dynamicRegistration: true,
+          dynamicRegistration: false,
           symbolKind: {
             valueSet: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
           }
@@ -364,32 +427,9 @@ export class LspClient {
         workspaceEdit: {
           documentChanges: true,
           failureHandling: 'textOnlyTransactional',
-          resourceOperations: ['create', 'rename', 'delete']
+          resourceOperations: ['create', 'delete', 'rename']
         },
         workspaceFolders: true
-      },
-      textDocument: {
-        callHierarchy: { dynamicRegistration: true },
-        codeAction: { dynamicRegistration: true },
-        completion: { dynamicRegistration: true },
-        colorProvider: { dynamicRegistration: true },
-        definition: { dynamicRegistration: true },
-        documentLink: { dynamicRegistration: true },
-        documentSymbol: { dynamicRegistration: true },
-        foldingRange: { dynamicRegistration: true },
-        formatting: { dynamicRegistration: true },
-        hover: { dynamicRegistration: true },
-        implementation: { dynamicRegistration: true },
-        inlayHint: { dynamicRegistration: true },
-        linkedEditingRange: { dynamicRegistration: true },
-        rangeFormatting: { dynamicRegistration: true },
-        references: { dynamicRegistration: true },
-        rename: { dynamicRegistration: true },
-        selectionRange: { dynamicRegistration: true },
-        signatureHelp: { dynamicRegistration: true },
-        synchronization: { dynamicRegistration: true },
-        typeDefinition: { dynamicRegistration: true },
-        typeHierarchy: { dynamicRegistration: true }
       }
     };
   }
@@ -409,6 +449,9 @@ export class LspClient {
     process.on('exit', (code, signal) => {
       this.connections.delete(languageId);
       this.serverStartTimes.delete(languageId);
+    });
+    process.stderr?.on('data', (data) => {
+      // Silently consume stderr to prevent noise
     });
   }
 
@@ -440,6 +483,22 @@ export class LspClient {
   getServerUptime(languageId: string): number {
     const startTime = this.serverStartTimes.get(languageId);
     return startTime ? Date.now() - startTime : 0;
+  }
+
+  /**
+   * Checks if a language server is alive and can handle the specified project path
+   * 
+   * @param {string} languageId - Language identifier
+   * @param {string} projectPath - Project path to validate against server configuration
+   * @returns {boolean} True if server is alive and can handle the project
+   */
+  isServerAlive(languageId: string, projectPath: string): boolean {
+    const connection = this.isServerRunning(languageId);
+    if (!connection) {
+      return false;
+    }
+    const config = this.config.getServerConfig(languageId);
+    return config.projects.some(project => projectPath.startsWith(project.path));
   }
 
   /**
@@ -615,10 +674,11 @@ export class LspClient {
    * Starts a language server for a specific language
    * 
    * @param {string} languageId - Language identifier
+   * @param {string} projectPath - Optional project path for connection reuse validation
    * @returns {Promise<void>} Promise that resolves when server is started
    */
-  async startServer(languageId: string): Promise<void> {
-    if (this.connections.has(languageId)) {
+  async startServer(languageId: string, projectPath?: string): Promise<void> {
+    if (projectPath && this.isServerAlive(languageId, projectPath)) {
       return;
     }
     const serverConfig = this.config.getServerConfig(languageId);
@@ -660,6 +720,7 @@ export class LspClient {
       return;
     }
     this.connections.delete(languageId);
+    this.openedFiles.delete(languageId);
     this.projectFiles.delete(languageId);
     this.serverStartTimes.delete(languageId);
     for (const [filePath, cachedLanguageId] of this.languageIdCache.entries()) {

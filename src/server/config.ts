@@ -26,7 +26,11 @@ interface ServerConfig {
   configuration?: Record<string, any>;
   extensions: string[];
   projects: ProjectConfig[];
-  workspace?: boolean;
+  settings?: {
+    message?: boolean;
+    registration?: boolean;
+    workspace?: boolean;
+  };
 }
 
 /**
@@ -108,6 +112,20 @@ export class LspConfigParser {
       if (!Array.isArray(serverConfig.projects) || serverConfig.projects.length === 0) {
         return false;
       }
+      if (serverConfig.settings !== undefined) {
+        if (typeof serverConfig.settings !== 'object' || serverConfig.settings === null || Array.isArray(serverConfig.settings)) {
+          return false;
+        }
+        if (serverConfig.settings.message !== undefined && typeof serverConfig.settings.message !== 'boolean') {
+          return false;
+        }
+        if (serverConfig.settings.registration !== undefined && typeof serverConfig.settings.registration !== 'boolean') {
+          return false;
+        }
+        if (serverConfig.settings.workspace !== undefined && typeof serverConfig.settings.workspace !== 'boolean') {
+          return false;
+        }
+      }
       for (const project of serverConfig.projects) {
         if (!project || typeof project !== 'object') {
           return false;
@@ -150,7 +168,11 @@ export class LspConfigParser {
     configuration?: Record<string, any>;
     extensions: string[];
     projects: ProjectConfig[];
-    workspace?: boolean;
+    settings: {
+      message: boolean;
+      registration: boolean;
+      workspace: boolean;
+    };
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
@@ -159,7 +181,12 @@ export class LspConfigParser {
         args: [],
         configuration: undefined,
         extensions: [],
-        projects: []
+        projects: [],
+        settings: {
+          message: true,
+          registration: true,
+          workspace: true
+        }
       };
     }
     return {
@@ -168,7 +195,11 @@ export class LspConfigParser {
       configuration: serverConfig.configuration,
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
-      workspace: serverConfig.workspace
+      settings: {
+        message: serverConfig.settings?.message ?? true,
+        registration: serverConfig.settings?.registration ?? true,
+        workspace: serverConfig.settings?.workspace ?? true
+      }
     };
   }
 

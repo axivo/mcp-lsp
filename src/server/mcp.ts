@@ -1279,9 +1279,9 @@ export class LspMcpServer {
   private async handleGetServerStatus(args: GetServerStatusArgs): Promise<any> {
     if (!args.language_id) {
       const status = this.client.getServers().map(async (languageId) => {
-        const isServerRunning = this.client.isServerRunning(languageId);
+        const connection = this.client.isServerRunning(languageId);
         const uptime = this.client.getServerUptime(languageId);
-        if (!isServerRunning) {
+        if (!connection) {
           return [languageId, { status: 'stopped', uptime: 0 }];
         }
         const serverConnection = this.client.getServerConnection(languageId);
@@ -1296,8 +1296,8 @@ export class LspMcpServer {
     if (!this.config.hasServerConfig(args.language_id)) {
       return { status: 'not_configured', uptime: 0 };
     }
-    const isServerRunning = this.client.isServerRunning(args.language_id);
-    if (!isServerRunning) {
+    const connection = this.client.isServerRunning(args.language_id);
+    if (!connection) {
       return { status: 'stopped', uptime: 0 };
     }
     const serverConnection = this.client.getServerConnection(args.language_id);
