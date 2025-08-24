@@ -14,18 +14,18 @@ interface Config {
 
 export interface ProjectConfig {
   name: string;
-  description: string;
-  url?: string;
-  ignore: string[];
   path: string;
+  description?: string;
+  ignore?: string[];
+  url?: string;
 }
 
 interface ServerConfig {
-  command: string;
   args: string[];
-  configuration?: Record<string, any>;
+  command: string;
   extensions: string[];
   projects: ProjectConfig[];
+  configuration?: Record<string, any>;
   settings?: {
     message?: boolean;
     registration?: boolean;
@@ -95,10 +95,10 @@ export class LspConfigParser {
       if (!serverConfig || typeof serverConfig !== 'object') {
         return false;
       }
-      if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
+      if (!Array.isArray(serverConfig.args)) {
         return false;
       }
-      if (!Array.isArray(serverConfig.args)) {
+      if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
         return false;
       }
       if (serverConfig.configuration !== undefined &&
@@ -133,10 +133,10 @@ export class LspConfigParser {
         if (typeof project.name !== 'string' || project.name.trim() === '') {
           return false;
         }
-        if (typeof project.description !== 'string' || project.description.trim() === '') {
+        if (project.description !== undefined && (typeof project.description !== 'string' || project.description.trim() === '')) {
           return false;
         }
-        if (!Array.isArray(project.ignore)) {
+        if (project.ignore !== undefined && !Array.isArray(project.ignore)) {
           return false;
         }
         if (typeof project.path !== 'string' || project.path.trim() === '') {
@@ -163,9 +163,8 @@ export class LspConfigParser {
    * @returns {Object} Server configuration
    */
   getServerConfig(languageId: string): {
-    command: string;
     args: string[];
-    configuration?: Record<string, any>;
+    command: string;
     extensions: string[];
     projects: ProjectConfig[];
     settings: {
@@ -173,33 +172,34 @@ export class LspConfigParser {
       registration: boolean;
       workspace: boolean;
     };
+    configuration?: Record<string, any>;
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
       return {
-        command: '',
         args: [],
-        configuration: undefined,
+        command: '',
         extensions: [],
         projects: [],
         settings: {
           message: true,
           registration: true,
           workspace: true
-        }
+        },
+        configuration: undefined
       };
     }
     return {
-      command: serverConfig.command,
       args: serverConfig.args,
-      configuration: serverConfig.configuration,
+      command: serverConfig.command,
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
       settings: {
         message: serverConfig.settings?.message ?? true,
         registration: serverConfig.settings?.registration ?? true,
         workspace: serverConfig.settings?.workspace ?? true
-      }
+      },
+      configuration: serverConfig.configuration
     };
   }
 

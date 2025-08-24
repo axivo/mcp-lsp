@@ -204,7 +204,7 @@ interface GetTypeHierarchyArgs {
 }
 
 interface GetWorkspaceSymbolsArgs {
-  project_name: string;
+  name: string;
   query: string;
 }
 
@@ -882,10 +882,10 @@ export class LspMcpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          project_name: { type: 'string', description: 'Project name to search within' },
+          name: { type: 'string', description: 'Project name to search within' },
           query: { type: 'string', description: 'Symbol search query' }
         },
-        required: ['project_name', 'query']
+        required: ['name', 'query']
       }
     };
   }
@@ -1259,12 +1259,12 @@ export class LspMcpServer {
     }
     const serverConfig = this.config.getServerConfig(args.language_id);
     const projects = serverConfig.projects.map(project => ({
-      project_name: project.name,
-      description: project.description,
-      url: project.url,
+      name: project.name,
       path: project.path,
-      configuration: serverConfig.configuration,
-      extensions: serverConfig.extensions
+      extensions: serverConfig.extensions,
+      configuration: serverConfig.configuration || {},
+      description: project.description || '',
+      url: project.url || ''
     }));
     return projects;
   }
@@ -1534,8 +1534,8 @@ export class LspMcpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
-    if (!args.project_name) {
-      return 'Missing required argument: project_name';
+    if (!args.name) {
+      return 'Missing required argument: name';
     }
     if (!args.query) {
       return 'Missing required argument: query';
@@ -1543,7 +1543,7 @@ export class LspMcpServer {
     const results: any[] = [];
     for (const languageId of this.client.getServers()) {
       if (this.client.isServerRunning(languageId)) {
-        await this.client.loadProjectFiles(languageId, args.project_name);
+        await this.client.loadProjectFiles(languageId, args.name);
         const params: WorkspaceSymbolParams = { query: args.query };
         const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
         if (result && Array.isArray(result)) {
