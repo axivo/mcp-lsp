@@ -56,8 +56,8 @@ import {
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { LspClient } from "./client.js";
-import { LspConfigParser } from "./config.js";
+import { Client } from "./client.js";
+import { ConfigParser } from "./config.js";
 
 interface GetCallHierarchyArgs {
   character: number;
@@ -225,23 +225,23 @@ type ToolHandler = (args: any) => Promise<any>;
 /**
  * LSP MCP Server implementation
  * 
- * @class LspMcpServer
+ * @class McpServer
  */
-export class LspMcpServer {
-  private client: LspClient;
-  private config: LspConfigParser;
+export class McpServer {
+  private client: Client;
+  private config: ConfigParser;
   private server: Server;
   private toolHandlers: Map<string, ToolHandler>;
   private transport?: StdioServerTransport;
 
   /**
-   * Creates a new LspMcpServer instance
+   * Creates a new McpServer instance
    * 
    * @param {string} configPath - Path to the LSP configuration file
    */
   constructor(configPath: string) {
-    this.client = new LspClient(configPath);
-    this.config = new LspConfigParser(configPath);
+    this.client = new Client(configPath);
+    this.config = new ConfigParser(configPath);
     this.server = new Server(
       { name: 'language-server-protocol', version: this.client.version() },
       { capabilities: { tools: {} } }

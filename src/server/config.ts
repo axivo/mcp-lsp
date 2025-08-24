@@ -39,13 +39,13 @@ interface ServerConfig {
  * Handles parsing and validation of LSP server configuration files with
  * comprehensive error handling and validation.
  * 
- * @class LspConfigParser
+ * @class ConfigParser
  */
-export class LspConfigParser {
+export class ConfigParser {
   private config: Config;
 
   /**
-   * Creates a new LspConfigParser instance
+   * Creates a new ConfigParser instance
    * 
    * @param {string} configPath - Path to the LSP configuration file
    */

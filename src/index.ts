@@ -11,7 +11,7 @@
  */
 
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
-import { LspMcpServer } from './server/mcp.js';
+import { McpServer } from './server/mcp.js';
 
 /**
  * Main entry point for the LSP MCP Server
@@ -41,15 +41,15 @@ async function main(): Promise<void> {
       return;
     }
   });
-  const lspFilePath = process.env.LSP_FILE_PATH;
-  if (!lspFilePath) {
-    console.error('Please set LSP_FILE_PATH environment variable');
+  const filePath = process.env.LSP_FILE_PATH;
+  if (!filePath) {
+    console.error('Please set LSP_FILE_PATH environment variable.');
     process.exit(1);
   }
-  const lspServer = new LspMcpServer(lspFilePath);
+  const mcpServer = new McpServer(filePath);
   const transport = new StdioServerTransport();
   try {
-    await lspServer.connect(transport);
+    await mcpServer.connect(transport);
   } catch (error) {
     console.error('Failed to connect MCP transport:', error);
   }

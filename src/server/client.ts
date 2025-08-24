@@ -61,7 +61,7 @@ import {
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { LspConfigParser } from './config.js';
+import { ConfigParser } from './config.js';
 
 interface ServerConnection {
   connection: MessageConnection;
@@ -75,10 +75,10 @@ interface ServerConnection {
  * Provides LSP server process management, JSON-RPC communication,
  * and file synchronization with proper lifecycle management.
  * 
- * @class LspClient
+ * @class Client
  */
-export class LspClient {
-  private config: LspConfigParser;
+export class Client {
+  private config: ConfigParser;
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
   private languageIdCache = new Map<string, string>();
@@ -96,12 +96,12 @@ export class LspClient {
   private readonly RATE_LIMIT_WINDOW = 60000;
 
   /**
-   * Creates a new LspClient instance
+   * Creates a new Client instance
    * 
    * @param {string} configPath - Path to the language server configuration file
    */
   constructor(configPath: string) {
-    this.config = new LspConfigParser(configPath);
+    this.config = new ConfigParser(configPath);
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
