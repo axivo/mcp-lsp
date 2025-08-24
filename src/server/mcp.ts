@@ -131,6 +131,13 @@ interface GetOutgoingCallsArgs {
   item: any;
 }
 
+interface GetProjectSymbolsArgs {
+  language_id: string;
+  name: string;
+  query: string;
+  timeout?: number;
+}
+
 interface GetRangeFormatArgs {
   end_character: number;
   end_line: number;
@@ -203,17 +210,20 @@ interface GetTypeHierarchyArgs {
   line: number;
 }
 
-interface GetWorkspaceSymbolsArgs {
+interface LoadProjectFilesArgs {
+  language_id: string;
   name: string;
-  query: string;
+  timeout?: number;
 }
 
 interface RestartServerArgs {
   language_id: string;
+  name?: string;
 }
 
 interface StartServerArgs {
   language_id: string;
+  name?: string;
 }
 
 interface StopServerArgs {
@@ -442,26 +452,6 @@ export class McpServer {
   }
 
   /**
-   * Tool definition for getting inlay hint details
-   * 
-   * @private
-   * @returns {Tool} Inlay hint details tool
-   */
-  private getInlayHintTool(): Tool {
-    return {
-      name: 'get_inlay_hint',
-      description: 'Get detailed information for an inlay hint item',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints' }
-        },
-        required: ['item']
-      }
-    };
-  }
-
-  /**
    * Tool definition for getting inlay hints
    * 
    * @private
@@ -481,6 +471,26 @@ export class McpServer {
           start_line: { type: 'number', description: 'Start line number (zero-based)' }
         },
         required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting inlay hint details
+   * 
+   * @private
+   * @returns {Tool} Inlay hint details tool
+   */
+  private getInlayHintTool(): Tool {
+    return {
+      name: 'get_inlay_hint',
+      description: 'Get detailed information for an inlay hint item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints' }
+        },
+        required: ['item']
       }
     };
   }
@@ -543,6 +553,29 @@ export class McpServer {
           item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
         },
         required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for project symbol search
+   * 
+   * @private
+   * @returns {Tool} Project symbols tool
+   */
+  private getProjectSymbolsTool(): Tool {
+    return {
+      name: 'get_project_symbols',
+      description: 'Search for symbols within a specific project',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          name: { type: 'string', description: 'Project name to search within' },
+          query: { type: 'string', description: 'Symbol search query' },
+          timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
+        },
+        required: ['language_id', 'name', 'query']
       }
     };
   }
@@ -704,7 +737,7 @@ export class McpServer {
   private getSymbolDefinitionsTool(): Tool {
     return {
       name: 'get_symbol_definitions',
-      description: 'Get all workspace symbol definition locations',
+      description: 'Get all project symbol definition locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -726,7 +759,7 @@ export class McpServer {
   private getSymbolReferencesTool(): Tool {
     return {
       name: 'get_symbol_references',
-      description: 'Get all workspace symbol usage locations',
+      description: 'Get all project symbol usage locations',
       inputSchema: {
         type: 'object',
         properties: {
@@ -749,7 +782,7 @@ export class McpServer {
   private getSymbolRenamesTool(): Tool {
     return {
       name: 'get_symbol_renames',
-      description: 'Get workspace-wide symbol rename suggestions',
+      description: 'Get all project symbol rename suggestions',
       inputSchema: {
         type: 'object',
         properties: {
@@ -805,6 +838,7 @@ export class McpServer {
       this.getLinkedEditingRangeTool(),
       this.getLinksTool(),
       this.getOutgoingCallsTool(),
+      this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
       this.getSelectionRangeTool(),
       this.getServerProjectsTool(),
@@ -818,7 +852,7 @@ export class McpServer {
       this.getSymbolsTool(),
       this.getTypeDefinitionsTool(),
       this.getTypeHierarchyTool(),
-      this.getWorkspaceSymbolsTool(),
+      this.loadProjectFilesTool(),
       this.restartServerTool(),
       this.startServerTool(),
       this.stopServerTool()
@@ -865,27 +899,6 @@ export class McpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for workspace symbol search
-   * 
-   * @private
-   * @returns {Tool} Workspace symbols tool
-   */
-  private getWorkspaceSymbolsTool(): Tool {
-    return {
-      name: 'get_workspace_symbols',
-      description: 'Search for symbols across entire workspace by name',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          name: { type: 'string', description: 'Project name to search within' },
-          query: { type: 'string', description: 'Symbol search query' }
-        },
-        required: ['name', 'query']
       }
     };
   }
@@ -1164,6 +1177,26 @@ export class McpServer {
   }
 
   /**
+   * Handles project symbol search tool requests
+   * 
+   * @private
+   * @param {GetProjectSymbolsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
+    if (args.language_id === undefined || args.name === undefined || args.query === undefined) {
+      return 'Missing required arguments: language_id, name, and query';
+    }
+    if (!this.client.getServerConnection(args.language_id) || !this.client.getProjectId(args.language_id) || this.client.getProjectId(args.language_id) !== args.name) {
+      return `Language server '${args.language_id}' for project '${args.name}' is not running.`;
+    }
+    await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
+    const params: WorkspaceSymbolParams = { query: args.query };
+    const result = await this.client.sendRequest(args.language_id, args.name, WorkspaceSymbolRequest.method, params);
+    return result;
+  }
+
+  /**
    * Handles get range format tool requests
    * 
    * @private
@@ -1185,40 +1218,6 @@ export class McpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
     return result;
-  }
-
-  /**
-   * Handles tool execution requests from MCP clients
-   * 
-   * @private
-   * @param {CallToolRequest} request - The tool execution request
-   * @returns {Promise<Object>} Response containing tool execution results
-   */
-  private async handleRequest(request: CallToolRequest): Promise<any> {
-    if (!request.params.arguments) {
-      return 'No arguments provided';
-    }
-    const handler = this.toolHandlers.get(request.params.name);
-    if (!handler) {
-      return `Unknown tool: ${request.params.name}`;
-    }
-    const result = await handler(request.params.arguments);
-    return this.client.response(result, typeof result === 'string' ? false : true);
-  }
-
-  /**
-   * Handles restart server tool requests
-   * 
-   * @private
-   * @param {RestartServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
-    await this.client.restartServer(args.language_id);
-    return `Language server '${args.language_id}' restarted successfully.`;
   }
 
   /**
@@ -1286,9 +1285,11 @@ export class McpServer {
         }
         const serverConnection = this.client.getServerConnection(languageId);
         if (!serverConnection || !serverConnection.initialized) {
-          return [languageId, { status: 'starting', uptime }];
+          const project = serverConnection?.projectName;
+          return [languageId, { status: 'starting', uptime, languageId, project }];
         }
-        return [languageId, { status: 'ready', uptime }];
+        const project = serverConnection.projectName;
+        return [languageId, { status: 'ready', uptime, languageId, project }];
       });
       const results = await Promise.all(status);
       return Object.fromEntries(results);
@@ -1303,9 +1304,11 @@ export class McpServer {
     const serverConnection = this.client.getServerConnection(args.language_id);
     const uptime = this.client.getServerUptime(args.language_id);
     if (!serverConnection || !serverConnection.initialized) {
-      return { status: 'starting', uptime };
+      const project = serverConnection?.projectName;
+      return { status: 'starting', uptime, languageId: args.language_id, project };
     }
-    return { status: 'ready', uptime };
+    const project = serverConnection.projectName;
+    return { status: 'ready', uptime, languageId: args.language_id, project };
   }
 
   /**
@@ -1325,46 +1328,6 @@ export class McpServer {
     };
     const result = await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
     return result;
-  }
-
-  /**
-   * Handles start server tool requests
-   * 
-   * @private
-   * @param {StartServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStartServer(args: StartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
-    if (this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is already running.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    if (!serverConfig.command) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    await this.client.startServer(args.language_id);
-    return `Language server '${args.language_id}' started successfully.`;
-  }
-
-  /**
-   * Handles stop server tool requests
-   * 
-   * @private
-   * @param {StopServerArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleStopServer(args: StopServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    await this.client.stopServer(args.language_id);
-    return `Language server '${args.language_id}' stopped successfully.`;
   }
 
   /**
@@ -1527,31 +1490,106 @@ export class McpServer {
   }
 
   /**
-   * Handles workspace symbol search tool requests
+   * Handles load project files tool requests
    * 
    * @private
-   * @param {GetWorkspaceSymbolsArgs} args - Tool arguments
+   * @param {LoadProjectFilesArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  private async handleGetWorkspaceSymbols(args: GetWorkspaceSymbolsArgs): Promise<any> {
-    if (!args.name) {
-      return 'Missing required argument: name';
+  private async handleLoadProjectFiles(args: LoadProjectFilesArgs): Promise<any> {
+    if (!args.language_id || !args.name) {
+      return 'Missing required arguments: language_id and name';
     }
-    if (!args.query) {
-      return 'Missing required argument: query';
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured.`;
     }
-    const results: any[] = [];
-    for (const languageId of this.client.getServers()) {
-      if (this.client.isServerRunning(languageId)) {
-        await this.client.loadProjectFiles(languageId, args.name);
-        const params: WorkspaceSymbolParams = { query: args.query };
-        const result = await this.client.sendRequest(languageId, WorkspaceSymbolRequest.method, params);
-        if (result && Array.isArray(result)) {
-          results.push(...result.map((symbol: any) => ({ ...symbol, server: languageId })));
-        }
-      }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
     }
-    return results;
+    const result = await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
+    return result;
+  }
+
+  /**
+   * Handles tool execution requests from MCP clients
+   * 
+   * @private
+   * @param {CallToolRequest} request - The tool execution request
+   * @returns {Promise<Object>} Response containing tool execution results
+   */
+  private async handleRequest(request: CallToolRequest): Promise<any> {
+    if (!request.params.arguments) {
+      return 'No arguments provided';
+    }
+    const handler = this.toolHandlers.get(request.params.name);
+    if (!handler) {
+      return `Unknown tool: ${request.params.name}`;
+    }
+    const result = await handler(request.params.arguments);
+    return this.client.response(result, typeof result === 'string' ? false : true);
+  }
+
+  /**
+   * Handles restart server tool requests
+   * 
+   * @private
+   * @param {RestartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleRestartServer(args: RestartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    await this.client.restartServer(args.language_id, args.name);
+    return `Successfully restarted '${args.language_id}' language server with '${args.name}' project.`;
+  }
+
+  /**
+   * Handles start server tool requests
+   * 
+   * @private
+   * @param {StartServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStartServer(args: StartServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    if (!serverConfig.command) {
+      return `Language server '${args.language_id}' is not configured.`;
+    }
+    const project = args.name || serverConfig.projects[0]?.name;
+    if (!project) {
+      return `No projects configured for '${args.language_id}' language server.`;
+    }
+    const currentProject = this.client.getProjectId(args.language_id);
+    if (currentProject) {
+      return `Language server '${args.language_id}' is already running '${currentProject}' project.`;
+    }
+    await this.client.startServer(args.language_id, project);
+    return `Successfully started '${args.language_id}' language server with '${project}' project.`;
+  }
+
+  /**
+   * Handles stop server tool requests
+   * 
+   * @private
+   * @param {StopServerArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleStopServer(args: StopServerArgs): Promise<any> {
+    if (!args.language_id) {
+      return 'Missing required argument: language_id';
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    const connection = this.client.getServerConnection(args.language_id);
+    if (connection) {
+      await this.client.stopServer(args.language_id, connection.projectName);
+    }
+    return `Successfully stopped '${args.language_id}' language server.`;
   }
 
   /**
@@ -1562,6 +1600,28 @@ export class McpServer {
    */
   private async handleTools(): Promise<any> {
     return { tools: this.getTools() };
+  }
+
+  /**
+   * Tool definition for loading project files
+   * 
+   * @private
+   * @returns {Tool} Load project files tool
+   */
+  private loadProjectFilesTool(): Tool {
+    return {
+      name: 'load_project_files',
+      description: 'Load all project files into language server for comprehensive analysis',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          name: { type: 'string', description: 'Project name to load all project files from' },
+          timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
+        },
+        required: ['language_id', 'name']
+      }
+    };
   }
 
   /**
@@ -1577,7 +1637,8 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          name: { type: 'string', description: 'Optional project name to restart (defaults to all projects for the language)' }
         },
         required: ['language_id']
       }
@@ -1614,6 +1675,7 @@ export class McpServer {
     this.toolHandlers.set('get_linked_editing_range', this.handleGetLinkedEditingRange.bind(this));
     this.toolHandlers.set('get_links', this.handleGetLinks.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
+    this.toolHandlers.set('get_project_symbols', this.handleGetProjectSymbols.bind(this));
     this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
     this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
@@ -1627,7 +1689,7 @@ export class McpServer {
     this.toolHandlers.set('get_symbols', this.handleGetSymbols.bind(this));
     this.toolHandlers.set('get_type_definitions', this.handleGetTypeDefinitions.bind(this));
     this.toolHandlers.set('get_type_hierarchy', this.handleGetTypeHierarchy.bind(this));
-    this.toolHandlers.set('get_workspace_symbols', this.handleGetWorkspaceSymbols.bind(this));
+    this.toolHandlers.set('load_project_files', this.handleLoadProjectFiles.bind(this));
     this.toolHandlers.set('restart_server', this.handleRestartServer.bind(this));
     this.toolHandlers.set('start_server', this.handleStartServer.bind(this));
     this.toolHandlers.set('stop_server', this.handleStopServer.bind(this));
@@ -1646,7 +1708,8 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          name: { type: 'string', description: 'Project name to load (optional, defaults to first project)' }
         },
         required: ['language_id']
       }
