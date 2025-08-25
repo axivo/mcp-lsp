@@ -6,13 +6,13 @@
  * @license BSD-3-Clause
  */
 
-import { ChildProcess, spawn } from 'child_process';
 import fg from 'fast-glob';
 import gracefulFs from 'graceful-fs';
+import { ChildProcess, spawn } from 'node:child_process';
+import { dirname, join } from 'node:path';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { promisify } from 'node:util';
 import pLimit from 'p-limit';
-import { dirname, join } from 'path';
-import { fileURLToPath, pathToFileURL } from 'url';
-import { promisify } from 'util';
 import {
   createMessageConnection,
   MessageConnection,
@@ -91,9 +91,6 @@ export class Client {
   private readonly fileReadLimit = pLimit(10);
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
-  private readonly IGNORE = [
-    'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp'
-  ];
   private readonly RATE_LIMIT_MAX_REQUESTS = 100;
   private readonly RATE_LIMIT_WINDOW = 60000;
 
@@ -118,8 +115,8 @@ export class Client {
    */
   private checkRateLimit(languageId: string): boolean {
     const now = Date.now();
-    const key = `${languageId}_${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
-    const current = this.rateLimiter.get(key) || 0;
+    const key = `ratelimit:${languageId}:${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
+    const current = this.rateLimiter.get(key) ?? 0;
     if (current >= this.RATE_LIMIT_MAX_REQUESTS) {
       this.response(`Rate limit exceeded for '${languageId}' language server.`);
       return false;
@@ -166,7 +163,7 @@ export class Client {
   }
 
   /**
-  * Finds all files with specified extensions using fast glob search
+  * Finds all files with specified extensions
   * 
   * @private
   * @param {string} cwd - Directory to search
@@ -178,20 +175,25 @@ export class Client {
     if (extensions.length === 0) {
       return [];
     }
-    const allPatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
-    if (patterns?.include) {
-      allPatterns.push(...patterns.include);
+    const excludes = [
+      'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp'
+    ];
+    const includePatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
+    if (patterns?.include && patterns.include.length) {
+      for (const pattern of patterns.include) {
+        const extensionPatterns = extensions.length === 1 ? extensions[0] : `{${extensions.join(',')}}`;
+        includePatterns.push(`${pattern}/{*,**/*}${extensionPatterns}`);
+        const index = excludes.findIndex(exclude => pattern === `**/${exclude}`);
+        if (index !== -1) {
+          excludes.splice(index, 1);
+        }
+      }
     }
-    const ignore = ['**/.*', ...this.IGNORE.map(pattern => `**/${pattern}`)];
+    const excludePatterns: string[] = ['**/.*', ...excludes.map(pattern => `**/${pattern}`)];
     if (patterns?.exclude) {
-      ignore.push(...patterns.exclude);
+      excludePatterns.push(...patterns.exclude);
     }
-    return await fg(allPatterns, {
-      absolute: true,
-      cwd,
-      ignore,
-      onlyFiles: true
-    });
+    return await fg(includePatterns, { cwd, absolute: true, onlyFiles: true, ignore: excludePatterns });
   }
 
   /**
@@ -699,8 +701,7 @@ export class Client {
       await this.initializeProject(languageId, project);
     }
     try {
-      const result = await serverConnection.connection.sendRequest(method, params);
-      return result;
+      return await serverConnection.connection.sendRequest(method, params);
     } catch (error) {
       return this.response(`Request failed for '${method}': ${error}`);
     }

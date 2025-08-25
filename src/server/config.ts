@@ -6,7 +6,7 @@
  * @license BSD-3-Clause
  */
 
-import { readFileSync } from 'fs';
+import { readFileSync } from 'node:fs';
 
 interface GlobalConfig {
   servers: Record<string, ServerConfig>;

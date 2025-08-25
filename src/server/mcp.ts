@@ -918,8 +918,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
   }
 
   /**
@@ -941,8 +940,7 @@ export class McpServer {
       },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
   }
 
   /**
@@ -959,8 +957,7 @@ export class McpServer {
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
   }
 
   /**
@@ -978,8 +975,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
   }
 
   /**
@@ -996,8 +992,7 @@ export class McpServer {
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
   }
 
   /**
@@ -1015,8 +1010,7 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` },
       options: { tabSize: 2, insertSpaces: true }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
   }
 
   /**
@@ -1034,8 +1028,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
   }
 
   /**
@@ -1053,8 +1046,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
   }
 
   /**
@@ -1075,8 +1067,7 @@ export class McpServer {
     if (!filePath) {
       return 'Invalid call hierarchy item: missing URI';
     }
-    const result = await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
   }
 
   /**
@@ -1090,8 +1081,7 @@ export class McpServer {
     if (!args.item) {
       return 'Missing required argument: item';
     }
-    const result = await this.client.sendServerRequest('', InlayHintResolveRequest.method, args.item);
-    return result;
+    return await this.client.sendServerRequest('', InlayHintResolveRequest.method, args.item);
   }
 
   /**
@@ -1113,8 +1103,7 @@ export class McpServer {
       },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
   }
 
   /**
@@ -1132,8 +1121,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
   }
 
   /**
@@ -1150,8 +1138,7 @@ export class McpServer {
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
   }
 
   /**
@@ -1172,8 +1159,7 @@ export class McpServer {
     if (!filePath) {
       return 'Invalid call hierarchy item: missing URI';
     }
-    const result = await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
   }
 
   /**
@@ -1192,8 +1178,7 @@ export class McpServer {
     }
     await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
     const params: WorkspaceSymbolParams = { query: args.query };
-    const result = await this.client.sendRequest(args.language_id, args.name, WorkspaceSymbolRequest.method, params);
-    return result;
+    return await this.client.sendRequest(args.language_id, args.name, WorkspaceSymbolRequest.method, params);
   }
 
   /**
@@ -1216,8 +1201,7 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` },
       options: { tabSize: 2, insertSpaces: true }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
   }
 
   /**
@@ -1235,8 +1219,7 @@ export class McpServer {
       positions: [{ character: args.character, line: args.line }],
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
   }
 
   /**
@@ -1277,22 +1260,33 @@ export class McpServer {
    */
   private async handleGetServerStatus(args: GetServerStatusArgs): Promise<any> {
     if (!args.language_id) {
-      const status = this.client.getServers().map(async (languageId) => {
-        const connection = this.client.isServerRunning(languageId);
-        const uptime = this.client.getServerUptime(languageId);
-        if (!connection) {
-          return [languageId, { status: 'stopped', uptime: 0 }];
+      const statusPromises = this.client.getServers().map(async (languageId) => {
+        try {
+          const connection = this.client.isServerRunning(languageId);
+          const uptime = this.client.getServerUptime(languageId);
+          if (!connection) {
+            return [languageId, { status: 'stopped', uptime: 0 }];
+          }
+          const serverConnection = this.client.getServerConnection(languageId);
+          if (!serverConnection || !serverConnection.initialized) {
+            const project = serverConnection?.projectName;
+            return [languageId, { status: 'starting', uptime, languageId, project }];
+          }
+          const project = serverConnection.projectName;
+          return [languageId, { status: 'ready', uptime, languageId, project }];
+        } catch (error) {
+          return [languageId, { status: 'error', uptime: 0, error: error instanceof Error ? error.message : String(error) }];
         }
-        const serverConnection = this.client.getServerConnection(languageId);
-        if (!serverConnection || !serverConnection.initialized) {
-          const project = serverConnection?.projectName;
-          return [languageId, { status: 'starting', uptime, languageId, project }];
-        }
-        const project = serverConnection.projectName;
-        return [languageId, { status: 'ready', uptime, languageId, project }];
       });
-      const results = await Promise.all(status);
-      return Object.fromEntries(results);
+      const results = await Promise.allSettled(statusPromises);
+      const statusEntries = results.map(result => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          return ['unknown', { status: 'error', uptime: 0, error: result.reason }];
+        }
+      });
+      return Object.fromEntries(statusEntries);
     }
     if (!this.config.hasServerConfig(args.language_id)) {
       return { status: 'not_configured', uptime: 0 };
@@ -1326,8 +1320,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
   }
 
   /**
@@ -1348,8 +1341,7 @@ export class McpServer {
     if (!filePath) {
       return 'Invalid type hierarchy item: missing URI';
     }
-    const result = await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
   }
 
   /**
@@ -1370,8 +1362,7 @@ export class McpServer {
     if (!filePath) {
       return 'Invalid type hierarchy item: missing URI';
     }
-    const result = await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
   }
 
   /**
@@ -1389,8 +1380,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
   }
 
   /**
@@ -1409,8 +1399,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
   }
 
   /**
@@ -1429,8 +1418,7 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` },
       newName: args.new_name
     };
-    const result = await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
   }
 
   /**
@@ -1447,8 +1435,7 @@ export class McpServer {
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
   }
 
   /**
@@ -1466,8 +1453,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
   }
 
   /**
@@ -1485,8 +1471,7 @@ export class McpServer {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    const result = await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
-    return result;
+    return await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
   }
 
   /**
@@ -1506,8 +1491,7 @@ export class McpServer {
     if (!this.client.isServerRunning(args.language_id)) {
       return `Language server '${args.language_id}' is not running.`;
     }
-    const result = await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
-    return result;
+    return await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
   }
 
   /**
