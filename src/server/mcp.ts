@@ -56,8 +56,8 @@ import {
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { Client } from "./client.js";
-import { Config } from "./config.js";
+import { Client } from './client.js';
+import { Config } from './config.js';
 
 interface GetCallHierarchyArgs {
   character: number;
@@ -444,7 +444,7 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy tool' }
         },
         required: ['item']
       }
@@ -488,7 +488,7 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints' }
+          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints tool' }
         },
         required: ['item']
       }
@@ -550,7 +550,7 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy' }
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy tool' }
         },
         required: ['item']
       }
@@ -701,7 +701,7 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy' }
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy tool' }
         },
         required: ['item']
       }
@@ -721,7 +721,7 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy' }
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy tool' }
         },
         required: ['item']
       }
@@ -911,9 +911,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetCallHierarchy(args: GetCallHierarchyArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: CallHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -929,9 +928,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetCodeActions(args: GetCodeActionsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: CodeActionParams = {
       context: { diagnostics: [] },
       range: {
@@ -951,9 +949,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetColors(args: GetColorsArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -968,9 +965,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetCompletions(args: GetCompletionsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -986,9 +982,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetFoldingRanges(args: GetFoldingRangesArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1003,9 +998,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetFormat(args: GetFormatArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` },
       options: { tabSize: 2, insertSpaces: true }
@@ -1021,9 +1015,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetHover(args: GetHoverArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1039,9 +1032,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetImplementations(args: GetImplementationsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1057,9 +1049,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetIncomingCalls(args: GetIncomingCallsArgs): Promise<any> {
-    if (!args.item) {
-      return 'Missing required argument: item';
-    }
+    const error = this.validateArgs(args, ['item']);
+    if (error) return error;
     const params: CallHierarchyIncomingCallsParams = {
       item: args.item
     };
@@ -1078,10 +1069,13 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetInlayHint(args: GetInlayHintArgs): Promise<any> {
-    if (!args.item) {
-      return 'Missing required argument: item';
+    const error = this.validateArgs(args, ['item']);
+    if (error) return error;
+    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
+    if (!filePath) {
+      return 'Invalid inlay hint item: missing URI';
     }
-    return await this.client.sendServerRequest('', InlayHintResolveRequest.method, args.item);
+    return await this.client.sendServerRequest(filePath, InlayHintResolveRequest.method, args.item);
   }
 
   /**
@@ -1092,10 +1086,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetInlayHints(args: GetInlayHintsArgs): Promise<any> {
-    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
-      args.end_line === undefined || args.end_character === undefined) {
-      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'start_line', 'start_character', 'end_line', 'end_character']);
+    if (error) return error;
     const params: InlayHintParams = {
       range: {
         start: { character: args.start_character, line: args.start_line },
@@ -1114,9 +1106,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetLinkedEditingRange(args: GetLinkedEditingRangeArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: LinkedEditingRangeParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1132,9 +1123,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetLinks(args: GetLinksArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1149,9 +1139,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetOutgoingCalls(args: GetOutgoingCallsArgs): Promise<any> {
-    if (!args.item) {
-      return 'Missing required argument: item';
-    }
+    const error = this.validateArgs(args, ['item']);
+    if (error) return error;
     const params: CallHierarchyOutgoingCallsParams = {
       item: args.item
     };
@@ -1170,10 +1159,10 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
-    if (args.language_id === undefined || args.name === undefined || args.query === undefined) {
-      return 'Missing required arguments: language_id, name, and query';
-    }
-    if (!this.client.getServerConnection(args.language_id) || !this.client.getProjectId(args.language_id) || this.client.getProjectId(args.language_id) !== args.name) {
+    const error = this.validateArgs(args, ['language_id', 'name', 'query']);
+    if (error) return error;
+    const projectId = this.client.getProjectId(args.language_id);
+    if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.name) {
       return `Language server '${args.language_id}' for project '${args.name}' is not running.`;
     }
     await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
@@ -1189,10 +1178,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetRangeFormat(args: GetRangeFormatArgs): Promise<any> {
-    if (!args.file_path || args.start_line === undefined || args.start_character === undefined ||
-      args.end_line === undefined || args.end_character === undefined) {
-      return 'Missing required arguments: end_character, end_line, file_path, start_character, and start_line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'start_line', 'start_character', 'end_line', 'end_character']);
+    if (error) return error;
     const params = {
       range: {
         start: { character: args.start_character, line: args.start_line },
@@ -1212,9 +1199,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSelectionRange(args: GetSelectionRangeArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: SelectionRangeParams = {
       positions: [{ character: args.character, line: args.line }],
       textDocument: { uri: `file://${args.file_path}` }
@@ -1230,9 +1216,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetServerProjects(args: GetServerProjectsArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
+    const error = this.validateArgs(args, ['language_id']);
+    if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
     }
@@ -1269,10 +1254,10 @@ export class McpServer {
           }
           const serverConnection = this.client.getServerConnection(languageId);
           if (!serverConnection || !serverConnection.initialized) {
-            const project = serverConnection?.projectName;
+            const project = serverConnection?.name;
             return [languageId, { status: 'starting', uptime, languageId, project }];
           }
-          const project = serverConnection.projectName;
+          const project = serverConnection.name;
           return [languageId, { status: 'ready', uptime, languageId, project }];
         } catch (error) {
           return [languageId, { status: 'error', uptime: 0, error: error instanceof Error ? error.message : String(error) }];
@@ -1298,10 +1283,10 @@ export class McpServer {
     const serverConnection = this.client.getServerConnection(args.language_id);
     const uptime = this.client.getServerUptime(args.language_id);
     if (!serverConnection || !serverConnection.initialized) {
-      const project = serverConnection?.projectName;
+      const project = serverConnection?.name;
       return { status: 'starting', uptime, languageId: args.language_id, project };
     }
-    const project = serverConnection.projectName;
+    const project = serverConnection.name;
     return { status: 'ready', uptime, languageId: args.language_id, project };
   }
 
@@ -1313,9 +1298,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSignature(args: GetSignatureArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1331,9 +1315,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSubtypes(args: GetSubtypesArgs): Promise<any> {
-    if (!args.item) {
-      return 'Missing required argument: item';
-    }
+    const error = this.validateArgs(args, ['item']);
+    if (error) return error;
     const params: TypeHierarchySubtypesParams = {
       item: args.item
     };
@@ -1352,9 +1335,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSupertypes(args: GetSupertypesArgs): Promise<any> {
-    if (!args.item) {
-      return 'Missing required argument: item';
-    }
+    const error = this.validateArgs(args, ['item']);
+    if (error) return error;
     const params: TypeHierarchySupertypesParams = {
       item: args.item
     };
@@ -1373,9 +1355,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbolDefinitions(args: GetSymbolDefinitionsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1391,9 +1372,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbolReferences(args: GetSymbolReferencesArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+    if (error) return error;
     const params: ReferenceParams = {
       context: { includeDeclaration: args.include_declaration ?? true },
       position: { character: args.character, line: args.line },
@@ -1410,9 +1390,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbolRenames(args: GetSymbolRenamesArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined || !args.new_name) {
-      return 'Missing required arguments: character, file_path, line, and new_name';
-    }
+    const error = this.validateArgs(args, ['character', 'file_path', 'line', 'new_name']);
+    if (error) return error;
     const params: RenameParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` },
@@ -1429,9 +1408,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSymbols(args: GetSymbolsArgs): Promise<any> {
-    if (!args.file_path) {
-      return 'Missing required argument: file_path';
-    }
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1446,9 +1424,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetTypeDefinitions(args: GetTypeDefinitionsArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+    if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1464,9 +1441,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetTypeHierarchy(args: GetTypeHierarchyArgs): Promise<any> {
-    if (!args.file_path || args.character === undefined || args.line === undefined) {
-      return 'Missing required arguments: character, file_path, and line';
-    }
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+    if (error) return error;
     const params: TypeHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1482,9 +1458,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleLoadProjectFiles(args: LoadProjectFilesArgs): Promise<any> {
-    if (!args.language_id || !args.name) {
-      return 'Missing required arguments: language_id and name';
-    }
+    const error = this.validateArgs(args, ['language_id', 'name']);
+    if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
     }
@@ -1521,9 +1496,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleRestartServer(args: RestartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
+    const error = this.validateArgs(args, ['language_id']);
+    if (error) return error;
     await this.client.restartServer(args.language_id, args.name);
     return `Successfully restarted '${args.language_id}' language server with '${args.name}' project.`;
   }
@@ -1536,9 +1510,8 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleStartServer(args: StartServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
+    const error = this.validateArgs(args, ['language_id']);
+    if (error) return error;
     const serverConfig = this.config.getServerConfig(args.language_id);
     if (!serverConfig.command) {
       return `Language server '${args.language_id}' is not configured.`;
@@ -1563,15 +1536,14 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleStopServer(args: StopServerArgs): Promise<any> {
-    if (!args.language_id) {
-      return 'Missing required argument: language_id';
-    }
+    const error = this.validateArgs(args, ['language_id']);
+    if (error) return error;
     if (!this.client.isServerRunning(args.language_id)) {
       return `Language server '${args.language_id}' is not running.`;
     }
     const connection = this.client.getServerConnection(args.language_id);
     if (connection) {
-      await this.client.stopServer(args.language_id, connection.projectName);
+      await this.client.stopServer(connection.name);
     }
     return `Successfully stopped '${args.language_id}' language server.`;
   }
@@ -1622,7 +1594,7 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Optional project name to restart (defaults to all projects for the language)' }
+          name: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
       }
@@ -1693,7 +1665,7 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Project name to load (optional, defaults to first project)' }
+          name: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
       }
@@ -1718,6 +1690,28 @@ export class McpServer {
         required: ['language_id']
       }
     };
+  }
+
+  /**
+   * Validates required arguments for tool handler methods
+   * 
+   * @private
+   * @param {any} args - The arguments object to validate
+   * @param {string[]} fields - Array of required field names
+   * @returns {string | null} Error message if validation fails, null if all required fields are present
+   */
+  private validateArgs(args: any, fields: string[]): string | null {
+    const missing: string[] = [];
+    for (const field of fields) {
+      const value = args[field];
+      if (value === undefined || value === null || (typeof value === 'string' && value === '')) {
+        missing.push(field);
+      }
+    }
+    if (missing.length) {
+      return `Missing required arguments: ${missing.join(', ')}`;
+    }
+    return null;
   }
 
   /**

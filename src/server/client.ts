@@ -67,7 +67,7 @@ interface ServerConnection {
   connection: MessageConnection;
   process: ChildProcess;
   initialized: boolean;
-  projectName: string;
+  name: string;
 }
 
 /**
@@ -118,7 +118,6 @@ export class Client {
     const key = `ratelimit:${languageId}:${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
     const current = this.rateLimiter.get(key) ?? 0;
     if (current >= this.RATE_LIMIT_MAX_REQUESTS) {
-      this.response(`Rate limit exceeded for '${languageId}' language server.`);
       return false;
     }
     this.rateLimiter.set(key, current + 1);
@@ -478,19 +477,29 @@ export class Client {
    * Sets process event handlers for a language server
    * 
    * @private
-   * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {ChildProcess} process - Language server process
    */
-  private setProcessHandlers(languageId: string, project: string, process: ChildProcess): void {
-    process.on('error', (error) => {
+  private setProcessHandlers(project: string, process: ChildProcess): void {
+    const cleanup = () => {
       this.connections.delete(project);
+      this.openedFiles.delete(project);
+      this.projectFiles.delete(project);
+      for (const [langId, projectName] of this.projectId.entries()) {
+        if (projectName === project) {
+          this.projectId.delete(langId);
+          break;
+        }
+      }
       this.serverStartTimes.delete(project);
-    });
-    process.on('exit', (code, signal) => {
-      this.connections.delete(project);
-      this.serverStartTimes.delete(project);
-    });
+      for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
+        if (cachedProject === project) {
+          this.languageIdCache.delete(filePath);
+        }
+      }
+    };
+    process.on('error', cleanup);
+    process.on('exit', cleanup);
   }
 
   /**
@@ -575,56 +584,57 @@ export class Client {
    * Loads files for a specific project into the language server
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} projectName - Project name to load
+   * @param {string} name - Project name to load
    * @param {number} timeout - Optional timeout in milliseconds
    * @returns {Promise<any>} Promise that resolves with standardized response
    */
-  async loadProjectFiles(languageId: string, projectName: string, timeout?: number): Promise<any> {
+  async loadProjectFiles(languageId: string, name: string, timeout?: number): Promise<any> {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
-    const projectConfig = serverConfig.projects.find(project => project.name === projectName);
+    const projectConfig = serverConfig.projects.find(project => project.name === name);
     if (!projectConfig) {
-      return this.response(`Project '${projectName}' not found in '${languageId}' server configuration.`);
+      return this.response(`Project '${name}' not found in '${languageId}' language server configuration.`);
     }
-    if (!this.connections.has(projectName)) {
-      return this.response(`Language server '${languageId}' for project '${projectName}' is not running.`);
+    if (!this.connections.has(name)) {
+      return this.response(`Language server '${languageId}' is not started for '${name}' project.`);
     }
-    let cachedFiles = this.projectFiles.get(projectName);
-    let projectFiles = cachedFiles?.get(projectName);
+    let cachedFiles = this.projectFiles.get(name);
+    let projectFiles = cachedFiles?.get(name);
     if (!projectFiles) {
-      await this.setFilesCache(languageId, projectName, projectConfig, serverConfig.extensions);
-      cachedFiles = this.projectFiles.get(projectName)!;
-      projectFiles = cachedFiles.get(projectName);
+      await this.setFilesCache(languageId, name, projectConfig, serverConfig.extensions);
+      cachedFiles = this.projectFiles.get(name)!;
+      projectFiles = cachedFiles.get(name);
     }
     if (!projectFiles) {
-      return this.response(`No files found for project '${projectName}' in '${languageId}' language server.`);
+      return this.response(`No files found for '${languageId}:${name}' project.`);
     }
-    const openedSet = this.openedFiles.get(projectName) || new Set();
+    const timer = Date.now();
     const unopenedFiles = projectFiles.filter(file => {
       const uri = pathToFileURL(file).toString();
-      return !openedSet.has(uri);
+      return !this.openedFiles.get(name)?.has(uri);
     });
     if (unopenedFiles.length) {
       if (timeout) {
         const timeoutPromise = new Promise<void>((_, reject) =>
-          setTimeout(() => reject(`Timeout after ${timeout}ms loading ${unopenedFiles.length} files.`), timeout)
+          setTimeout(() => reject(`Timeout after ${timeout}ms loading ${unopenedFiles.length} files for '${languageId}:${name}' project.`), timeout)
         );
         try {
           await Promise.race([
-            this.openFiles(languageId, projectName, unopenedFiles),
+            this.openFiles(languageId, name, unopenedFiles),
             timeoutPromise
           ]);
         } catch (error) {
-          this.openFiles(languageId, projectName, unopenedFiles.slice(0, 10));
-          return this.response(`Timeout loading '${projectName}' project files: ${error}`);
+          this.openFiles(languageId, name, unopenedFiles.slice(0, 10));
+          return this.response(`Timeout loading '${name}' project files: ${error}`);
         }
       } else {
-        await this.openFiles(languageId, projectName, unopenedFiles);
+        await this.openFiles(languageId, name, unopenedFiles);
       }
     }
-    return this.response(`Successfully loaded all '${projectName}' project files.`);
+    const elapsed = Date.now() - timer;
+    return this.response(`Successfully loaded ${unopenedFiles.length} files in ${elapsed}ms for '${languageId}:${name}' project.`);
   }
 
   /**
@@ -653,14 +663,14 @@ export class Client {
     if (project) {
       const currentProject = this.projectId.get(languageId);
       if (currentProject) {
-        await this.stopServer(languageId, currentProject);
+        await this.stopServer(currentProject);
         this.initializedProjects.delete(currentProject);
       }
       await this.startServer(languageId, project);
     } else {
       const currentProject = this.projectId.get(languageId);
       if (currentProject) {
-        await this.stopServer(languageId, currentProject);
+        await this.stopServer(currentProject);
         this.initializedProjects.delete(currentProject);
         await this.startServer(languageId, currentProject);
       }
@@ -692,7 +702,9 @@ export class Client {
    * @returns {Promise<any>} Promise that resolves with the response
    */
   async sendRequest(languageId: string, project: string, method: string, params: any): Promise<any> {
-    this.checkRateLimit(languageId);
+    if (!this.checkRateLimit(languageId)) {
+      return this.response(`Rate limit exceeded for '${languageId}' language server.`);
+    }
     const serverConnection = this.connections.get(project);
     if (!serverConnection || !serverConnection.process.stdin) {
       return this.response(`Language server '${project}' is not running.`);
@@ -750,7 +762,6 @@ export class Client {
       TypeHierarchySupertypesRequest.method
     ];
     if (methods.includes(method)) {
-      const absolutePath = file.startsWith('/') ? file : join(process.cwd(), file);
       for (const [languageId, runningProject] of this.projectId.entries()) {
         if (runningProject === project) {
           const cachedFiles = this.projectFiles.get(project);
@@ -778,32 +789,32 @@ export class Client {
    * @returns {Promise<void>} Promise that resolves when all servers are stopped
    */
   async shutdown(): Promise<void> {
-    const shutdownPromises = Array.from(this.projectId.entries()).map(([languageId, project]) => {
-      return this.stopServer(languageId, project);
+    const shutdown = Array.from(this.connections.keys()).map(project => {
+      return this.stopServer(project);
     });
-    await Promise.allSettled(shutdownPromises);
+    await Promise.allSettled(shutdown);
   }
 
   /**
    * Starts a language server for a specific language
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} projectName - Optional project name to start (defaults to first project)
+   * @param {string} name - Optional project name to start (defaults to first project)
    * @returns {Promise<void>} Promise that resolves when server is started
    */
-  async startServer(languageId: string, projectName?: string): Promise<void> {
+  async startServer(languageId: string, name?: string): Promise<void> {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
-    const selectedProject = projectName ?
-      serverConfig.projects.find(p => p.name === projectName) :
-      serverConfig.projects[0];
+    const selectedProject = name
+      ? serverConfig.projects.find(project => project.name === name)
+      : serverConfig.projects[0];
     if (!selectedProject) {
-      return this.response(`Project '${projectName || 'default'}' not found for language '${languageId}'.`);
+      return this.response(`Project '${name ?? 'default'}' not found for '${languageId}' language server.`);
     }
     if (this.connections.has(selectedProject.name)) {
-      return this.response(`Language server for project '${selectedProject.name}' is already running.`);
+      return this.response(`Language server '${languageId}' for project '${selectedProject.name}' is already running.`);
     }
     try {
       const childProcess = spawn(serverConfig.command, serverConfig.args, {
@@ -812,20 +823,21 @@ export class Client {
         stdio: ['pipe', 'pipe', 'pipe']
       });
       if (!childProcess.stdout || !childProcess.stdin || !childProcess.stderr) {
-        return this.response(`Failed to create stdio pipes for '${languageId}' language server`);
+        return this.response(`Failed to create stdio pipes for '${languageId}' language server.`);
       }
       const connection = this.createConnection(languageId, childProcess);
       const serverConnection: ServerConnection = {
         connection,
         initialized: false,
         process: childProcess,
-        projectName: selectedProject.name
+        name: selectedProject.name
       };
       this.projectId.set(languageId, selectedProject.name);
       this.connections.set(selectedProject.name, serverConnection);
       this.serverStartTimes.set(selectedProject.name, Date.now());
-      this.setProcessHandlers(languageId, selectedProject.name, childProcess);
+      this.setProcessHandlers(selectedProject.name, childProcess);
       await this.initializeServer(languageId, selectedProject.name);
+      return this.response(`Successfully started language server '${languageId}' for '${selectedProject.name}' project.`);
     } catch (error) {
       return this.response(`Failed to start '${languageId}' language server: ${error}`);
     }
@@ -834,11 +846,10 @@ export class Client {
   /**
    * Stops a specific language server process
    * 
-   * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @returns {Promise<void>} Promise that resolves when server is stopped
    */
-  async stopServer(languageId: string, project: string): Promise<void> {
+  async stopServer(project: string): Promise<void> {
     const serverConnection = this.connections.get(project);
     if (!serverConnection) {
       return;
@@ -846,7 +857,12 @@ export class Client {
     this.connections.delete(project);
     this.openedFiles.delete(project);
     this.projectFiles.delete(project);
-    this.projectId.delete(project);
+    for (const [languageId, projectName] of this.projectId.entries()) {
+      if (projectName === project) {
+        this.projectId.delete(languageId);
+        break;
+      }
+    }
     this.serverStartTimes.delete(project);
     for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
       if (cachedProject === project) {
