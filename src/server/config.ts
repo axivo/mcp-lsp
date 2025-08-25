@@ -30,8 +30,12 @@ interface ServerConfig {
   projects: ProjectConfig[];
   configuration?: Record<string, any>;
   settings?: {
-    message?: boolean;
-    registration?: boolean;
+    maxConcurrentFileReads?: number;
+    messageRequest?: boolean;
+    rateLimitMaxRequests?: number;
+    rateLimitWindowMs?: number;
+    registrationRequest?: boolean;
+    shutdownGracePeriodMs?: number;
     workspace?: boolean;
   };
 }
@@ -119,10 +123,10 @@ export class Config {
         if (typeof serverConfig.settings !== 'object' || serverConfig.settings === null || Array.isArray(serverConfig.settings)) {
           return false;
         }
-        if (serverConfig.settings.message !== undefined && typeof serverConfig.settings.message !== 'boolean') {
+        if (serverConfig.settings.messageRequest !== undefined && typeof serverConfig.settings.messageRequest !== 'boolean') {
           return false;
         }
-        if (serverConfig.settings.registration !== undefined && typeof serverConfig.settings.registration !== 'boolean') {
+        if (serverConfig.settings.registrationRequest !== undefined && typeof serverConfig.settings.registrationRequest !== 'boolean') {
           return false;
         }
         if (serverConfig.settings.workspace !== undefined && typeof serverConfig.settings.workspace !== 'boolean') {
@@ -179,8 +183,12 @@ export class Config {
     extensions: string[];
     projects: ProjectConfig[];
     settings: {
-      message: boolean;
-      registration: boolean;
+      maxConcurrentFileReads: number;
+      messageRequest: boolean;
+      rateLimitMaxRequests: number;
+      rateLimitWindowMs: number;
+      registrationRequest: boolean;
+      shutdownGracePeriodMs: number;
       workspace: boolean;
     };
     configuration?: Record<string, any>;
@@ -193,8 +201,12 @@ export class Config {
         extensions: [],
         projects: [],
         settings: {
-          message: true,
-          registration: true,
+          maxConcurrentFileReads: 10,
+          messageRequest: true,
+          rateLimitMaxRequests: 100,
+          rateLimitWindowMs: 60000,
+          registrationRequest: true,
+          shutdownGracePeriodMs: 100,
           workspace: true
         },
         configuration: undefined
@@ -206,8 +218,12 @@ export class Config {
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
       settings: {
-        message: serverConfig.settings?.message ?? true,
-        registration: serverConfig.settings?.registration ?? true,
+        maxConcurrentFileReads: serverConfig.settings?.maxConcurrentFileReads ?? 10,
+        messageRequest: serverConfig.settings?.messageRequest ?? true,
+        rateLimitMaxRequests: serverConfig.settings?.rateLimitMaxRequests ?? 100,
+        rateLimitWindowMs: serverConfig.settings?.rateLimitWindowMs ?? 60000,
+        registrationRequest: serverConfig.settings?.registrationRequest ?? true,
+        shutdownGracePeriodMs: serverConfig.settings?.shutdownGracePeriodMs ?? 100,
         workspace: serverConfig.settings?.workspace ?? true
       },
       configuration: serverConfig.configuration

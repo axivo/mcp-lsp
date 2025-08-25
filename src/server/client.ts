@@ -88,11 +88,9 @@ export class Client {
   private projectId = new Map<string, string>();
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
-  private readonly fileReadLimit = pLimit(10);
+  private fileReadLimit: any;
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
-  private readonly RATE_LIMIT_MAX_REQUESTS = 100;
-  private readonly RATE_LIMIT_WINDOW = 60000;
 
   /**
    * Creates a new Client instance
@@ -101,6 +99,8 @@ export class Client {
    */
   constructor(configPath: string) {
     this.config = new Config(configPath);
+    const defaultSettings = this.config.getServerConfig('default').settings;
+    this.fileReadLimit = pLimit(defaultSettings.maxConcurrentFileReads);
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -114,10 +114,11 @@ export class Client {
    * @throws {Error} When rate limit is exceeded
    */
   private checkRateLimit(languageId: string): boolean {
+    const serverConfig = this.config.getServerConfig(languageId);
     const now = Date.now();
-    const key = `ratelimit:${languageId}:${Math.floor(now / this.RATE_LIMIT_WINDOW)}`;
+    const key = `ratelimit:${languageId}:${Math.floor(now / serverConfig.settings.rateLimitWindowMs)}`;
     const current = this.rateLimiter.get(key) ?? 0;
-    if (current >= this.RATE_LIMIT_MAX_REQUESTS) {
+    if (current >= serverConfig.settings.rateLimitMaxRequests) {
       return false;
     }
     this.rateLimiter.set(key, current + 1);
@@ -144,12 +145,12 @@ export class Client {
     );
     connection.onError(() => { });
     const serverConfig = this.config.getServerConfig(languageId);
-    if (serverConfig.settings.message === false) {
+    if (serverConfig.settings.messageRequest === false) {
       connection.onRequest(ShowMessageRequest.method, (params: any) => {
         return null;
       });
     }
-    if (serverConfig.settings.registration === false) {
+    if (serverConfig.settings.registrationRequest === false) {
       connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
         return {};
       });
@@ -608,7 +609,7 @@ export class Client {
       projectFiles = cachedFiles.get(name);
     }
     if (!projectFiles) {
-      return this.response(`No files found for '${languageId}:${name}' project.`);
+      return this.response(`No files found for '${name}' project in '${languageId}' language server.`);
     }
     const timer = Date.now();
     const unopenedFiles = projectFiles.filter(file => {
@@ -618,7 +619,10 @@ export class Client {
     if (unopenedFiles.length) {
       if (timeout) {
         const timeoutPromise = new Promise<void>((_, reject) =>
-          setTimeout(() => reject(`Timeout after ${timeout}ms loading ${unopenedFiles.length} files for '${languageId}:${name}' project.`), timeout)
+          setTimeout(() =>
+            reject(`Timeout loading ${unopenedFiles.length} files after ${timeout}ms for '${name}' project in '${languageId}' language server.`),
+            timeout
+          )
         );
         try {
           await Promise.race([
@@ -634,7 +638,7 @@ export class Client {
       }
     }
     const elapsed = Date.now() - timer;
-    return this.response(`Successfully loaded ${unopenedFiles.length} files in ${elapsed}ms for '${languageId}:${name}' project.`);
+    return this.response(`Successfully loaded ${unopenedFiles.length} files after ${elapsed}ms for '${name}' project in '${languageId}' language server.`);
   }
 
   /**
@@ -871,7 +875,8 @@ export class Client {
     }
     try {
       await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
-      await new Promise(resolve => setTimeout(resolve, 100));
+      const serverConfig = this.config.getServerConfig('default');
+      await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
       serverConnection.connection.sendNotification(ExitNotification.method, {});
       serverConnection.connection.dispose();
       if (!serverConnection.process.killed) {
