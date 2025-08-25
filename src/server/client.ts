@@ -609,7 +609,7 @@ export class Client {
       projectFiles = cachedFiles.get(name);
     }
     if (!projectFiles) {
-      return this.response(`No files found for '${name}' project in '${languageId}' language server.`);
+      return this.response(`Files not found for '${name}' project in '${languageId}' language server.`);
     }
     const timer = Date.now();
     const unopenedFiles = projectFiles.filter(file => {
@@ -618,20 +618,13 @@ export class Client {
     });
     if (unopenedFiles.length) {
       if (timeout) {
-        const timeoutPromise = new Promise<void>((_, reject) =>
-          setTimeout(() =>
-            reject(`Timeout loading ${unopenedFiles.length} files after ${timeout}ms for '${name}' project in '${languageId}' language server.`),
-            timeout
-          )
-        );
+        const message = `Timeout loading ${unopenedFiles.length} files after ${timeout}ms for '${name}' project in '${languageId}' language server`;
+        const timeoutPromise = new Promise<void>((_, reject) => setTimeout(() => reject(`${message}.`), timeout));
         try {
-          await Promise.race([
-            this.openFiles(languageId, name, unopenedFiles),
-            timeoutPromise
-          ]);
+          await Promise.race([this.openFiles(languageId, name, unopenedFiles), timeoutPromise]);
         } catch (error) {
           this.openFiles(languageId, name, unopenedFiles.slice(0, 10));
-          return this.response(`Timeout loading '${name}' project files: ${error}`);
+          return this.response(`${message}: ${error}`);
         }
       } else {
         await this.openFiles(languageId, name, unopenedFiles);
