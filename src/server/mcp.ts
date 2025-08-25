@@ -57,7 +57,7 @@ import {
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { Client } from "./client.js";
-import { ConfigParser } from "./config.js";
+import { Config } from "./config.js";
 
 interface GetCallHierarchyArgs {
   character: number;
@@ -239,7 +239,7 @@ type ToolHandler = (args: any) => Promise<any>;
  */
 export class McpServer {
   private client: Client;
-  private config: ConfigParser;
+  private config: Config;
   private server: Server;
   private toolHandlers: Map<string, ToolHandler>;
   private transport?: StdioServerTransport;
@@ -251,7 +251,7 @@ export class McpServer {
    */
   constructor(configPath: string) {
     this.client = new Client(configPath);
-    this.config = new ConfigParser(configPath);
+    this.config = new Config(configPath);
     this.server = new Server(
       { name: 'language-server-protocol', version: this.client.version() },
       { capabilities: { tools: {} } }
@@ -1261,9 +1261,9 @@ export class McpServer {
       name: project.name,
       path: project.path,
       extensions: serverConfig.extensions,
-      configuration: serverConfig.configuration || {},
-      description: project.description || '',
-      url: project.url || ''
+      configuration: serverConfig.configuration ?? {},
+      description: project.description ?? '',
+      url: project.url ?? ''
     }));
     return projects;
   }

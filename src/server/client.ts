@@ -61,7 +61,7 @@ import {
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { ConfigParser } from './config.js';
+import { Config, ProjectConfig } from './config.js';
 
 interface ServerConnection {
   connection: MessageConnection;
@@ -79,7 +79,7 @@ interface ServerConnection {
  * @class Client
  */
 export class Client {
-  private config: ConfigParser;
+  private config: Config;
   private connections = new Map<string, ServerConnection>();
   private initializedProjects: Set<string> = new Set();
   private languageIdCache = new Map<string, string>();
@@ -103,7 +103,7 @@ export class Client {
    * @param {string} configPath - Path to the language server configuration file
    */
   constructor(configPath: string) {
-    this.config = new ConfigParser(configPath);
+    this.config = new Config(configPath);
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -166,25 +166,30 @@ export class Client {
   }
 
   /**
-   * Finds all files with specified extensions using fast glob search
-   * 
-   * @private
-   * @param {string} dir - Directory to search
-   * @param {string[]} extensions - File extensions
-   * @param {string[]} ignore - Additional ignore patterns
-   * @returns {Promise<string[]>} Array of matching file paths
-   */
-  private async findFiles(dir: string, extensions: string[], ignore: string[] = []): Promise<string[]> {
+  * Finds all files with specified extensions using fast glob search
+  * 
+  * @private
+  * @param {string} cwd - Directory to search
+  * @param {string[]} extensions - File extensions
+  * @param {object} patterns - Pattern configuration with exclude and include arrays
+  * @returns {Promise<string[]>} Array of matching file paths
+  */
+  private async findFiles(cwd: string, extensions: string[], patterns: ProjectConfig['patterns'] = {}): Promise<string[]> {
     if (extensions.length === 0) {
       return [];
     }
-    const defaultIgnore = ['**/.*', ...this.IGNORE.map(pattern => `**/${pattern}`)];
-    const projectIgnore = ignore.map(pattern => pattern.includes('/') ? pattern : `**/${pattern}`);
-    const pattern = extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`;
-    return await fg(pattern, {
+    const allPatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
+    if (patterns?.include) {
+      allPatterns.push(...patterns.include);
+    }
+    const ignore = ['**/.*', ...this.IGNORE.map(pattern => `**/${pattern}`)];
+    if (patterns?.exclude) {
+      ignore.push(...patterns.exclude);
+    }
+    return await fg(allPatterns, {
       absolute: true,
-      cwd: dir,
-      ignore: [...defaultIgnore, ...projectIgnore],
+      cwd,
+      ignore,
       onlyFiles: true
     });
   }
@@ -311,7 +316,11 @@ export class Client {
    */
   private async openFile(languageId: string, project: string, filePath: string): Promise<void> {
     const uri = pathToFileURL(filePath).toString();
-    const openedSet = this.openedFiles.get(project) || new Set<string>();
+    let openedSet = this.openedFiles.get(project);
+    if (!openedSet) {
+      openedSet = new Set<string>();
+      this.openedFiles.set(project, openedSet);
+    }
     if (openedSet.has(uri)) {
       return;
     }
@@ -454,7 +463,7 @@ export class Client {
       cachedFiles = new Map<string, string[]>();
       this.projectFiles.set(project, cachedFiles);
     }
-    const files = await this.findFiles(projectConfig.path, extensions, projectConfig.ignore || []);
+    const files = await this.findFiles(projectConfig.path, extensions, projectConfig.patterns);
     if (files.length) {
       files.forEach(filePath => {
         this.languageIdCache.set(filePath, project);
@@ -578,14 +587,17 @@ export class Client {
       return this.response(`Project '${projectName}' not found in '${languageId}' server configuration.`);
     }
     if (!this.connections.has(projectName)) {
-      return this.response(`Language server for project '${projectName}' is not running.`);
+      return this.response(`Language server '${languageId}' for project '${projectName}' is not running.`);
     }
     let cachedFiles = this.projectFiles.get(projectName);
     let projectFiles = cachedFiles?.get(projectName);
     if (!projectFiles) {
       await this.setFilesCache(languageId, projectName, projectConfig, serverConfig.extensions);
       cachedFiles = this.projectFiles.get(projectName)!;
-      projectFiles = cachedFiles.get(projectName) || [];
+      projectFiles = cachedFiles.get(projectName);
+    }
+    if (!projectFiles) {
+      return this.response(`No files found for project '${projectName}' in '${languageId}' language server.`);
     }
     const openedSet = this.openedFiles.get(projectName) || new Set();
     const unopenedFiles = projectFiles.filter(file => {
@@ -610,7 +622,7 @@ export class Client {
         await this.openFiles(languageId, projectName, unopenedFiles);
       }
     }
-    return this.response(`All '${projectName}' project files loaded successfully.`);
+    return this.response(`Successfully loaded all '${projectName}' project files.`);
   }
 
   /**
@@ -742,8 +754,10 @@ export class Client {
         if (runningProject === project) {
           const cachedFiles = this.projectFiles.get(project);
           if (cachedFiles) {
-            const projectFiles = cachedFiles.get(project) || [];
-            await this.openFiles(languageId, project, projectFiles);
+            const projectFiles = cachedFiles.get(project);
+            if (projectFiles) {
+              await this.openFiles(languageId, project, projectFiles);
+            }
           }
           return this.sendRequest(languageId, project, method, params);
         }

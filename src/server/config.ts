@@ -8,7 +8,7 @@
 
 import { readFileSync } from 'fs';
 
-interface Config {
+interface GlobalConfig {
   servers: Record<string, ServerConfig>;
 }
 
@@ -16,7 +16,10 @@ export interface ProjectConfig {
   name: string;
   path: string;
   description?: string;
-  ignore?: string[];
+  patterns?: {
+    exclude?: string[];
+    include?: string[];
+  };
   url?: string;
 }
 
@@ -34,18 +37,18 @@ interface ServerConfig {
 }
 
 /**
- * LSP Configuration Parser
+ * LSP Configuration
  * 
  * Handles parsing and validation of LSP server configuration files with
  * comprehensive error handling and validation.
  * 
- * @class ConfigParser
+ * @class Config
  */
-export class ConfigParser {
-  private config: Config;
+export class Config {
+  private config: GlobalConfig;
 
   /**
-   * Creates a new ConfigParser instance
+   * Creates a new Config instance
    * 
    * @param {string} configPath - Path to the LSP configuration file
    */
@@ -58,14 +61,14 @@ export class ConfigParser {
    * 
    * @private
    * @param {string} configPath - Path to the configuration file
-   * @returns {Config} Parsed and validated configuration
+   * @returns {GlobalConfig} Parsed and validated configuration
    */
-  private loadConfig(configPath: string): Config {
+  private loadConfig(configPath: string): GlobalConfig {
     const emptyConfig = { servers: {} };
     try {
       const configContent = readFileSync(configPath, 'utf8');
       const config = JSON.parse(configContent);
-      if (!this.validateConfig(config)) {
+      if (!this.validate(config)) {
         return emptyConfig;
       }
       return config;
@@ -78,10 +81,10 @@ export class ConfigParser {
    * Validates the configuration structure and content
    * 
    * @private
-   * @param {Config} config - Configuration to validate
+   * @param {GlobalConfig} config - Configuration to validate
    * @returns {boolean} True if configuration is valid, false otherwise
    */
-  private validateConfig(config: Config): boolean {
+  private validate(config: GlobalConfig): boolean {
     if (!config || typeof config !== 'object') {
       return false;
     }
@@ -136,8 +139,16 @@ export class ConfigParser {
         if (project.description !== undefined && (typeof project.description !== 'string' || project.description.trim() === '')) {
           return false;
         }
-        if (project.ignore !== undefined && !Array.isArray(project.ignore)) {
-          return false;
+        if (project.patterns !== undefined) {
+          if (typeof project.patterns !== 'object' || project.patterns === null || Array.isArray(project.patterns)) {
+            return false;
+          }
+          if (project.patterns.exclude !== undefined && !Array.isArray(project.patterns.exclude)) {
+            return false;
+          }
+          if (project.patterns.include !== undefined && !Array.isArray(project.patterns.include)) {
+            return false;
+          }
         }
         if (typeof project.path !== 'string' || project.path.trim() === '') {
           return false;
