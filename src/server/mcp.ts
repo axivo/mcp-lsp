@@ -45,6 +45,8 @@ import {
   RenameRequest,
   SelectionRangeParams,
   SelectionRangeRequest,
+  SemanticTokensParams,
+  SemanticTokensRequest,
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
@@ -157,6 +159,10 @@ interface GetSelectionRangeArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetSemanticTokensArgs {
+  file_path: string;
 }
 
 interface GetServerProjectsArgs {
@@ -656,6 +662,26 @@ export class McpServer {
   }
 
   /**
+   * Tool definition for getting semantic tokens
+   * 
+   * @private
+   * @returns {Tool} Semantic tokens tool
+   */
+  private getSemanticTokensTool(): Tool {
+    return {
+      name: 'get_semantic_tokens',
+      description: 'Get semantic token information for syntax highlighting and code analysis',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
    * Tool definition for getting server projects
    * 
    * @private
@@ -871,6 +897,7 @@ export class McpServer {
       this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
       this.getSelectionRangeTool(),
+      this.getSemanticTokensTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSignatureTool(),
@@ -1253,6 +1280,22 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
+  }
+
+  /**
+   * Handles get semantic tokens tool requests
+   * 
+   * @private
+   * @param {GetSemanticTokensArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetSemanticTokens(args: GetSemanticTokensArgs): Promise<any> {
+    const error = this.validateArgs(args, ['file_path']);
+    if (error) return error;
+    const params: SemanticTokensParams = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, SemanticTokensRequest.method, params);
   }
 
   /**
@@ -1682,6 +1725,7 @@ export class McpServer {
     this.toolHandlers.set('get_project_symbols', this.handleGetProjectSymbols.bind(this));
     this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
     this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
+    this.toolHandlers.set('get_semantic_tokens', this.handleGetSemanticTokens.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_signature', this.handleGetSignature.bind(this));
