@@ -1250,17 +1250,17 @@ export class McpServer {
           const connection = this.client.isServerRunning(languageId);
           const uptime = this.client.getServerUptime(languageId);
           if (!connection) {
-            return [languageId, { status: 'stopped', uptime: 0 }];
+            return [languageId, { status: 'stopped', uptime: `0ms` }];
           }
           const serverConnection = this.client.getServerConnection(languageId);
           if (!serverConnection || !serverConnection.initialized) {
             const project = serverConnection?.name;
-            return [languageId, { status: 'starting', uptime, languageId, project }];
+            return [languageId, { status: 'starting', uptime: `${uptime}ms`, languageId, project }];
           }
           const project = serverConnection.name;
-          return [languageId, { status: 'ready', uptime, languageId, project }];
+          return [languageId, { status: 'ready', uptime: `${uptime}ms`, languageId, project }];
         } catch (error) {
-          return [languageId, { status: 'error', uptime: 0, error: error instanceof Error ? error.message : String(error) }];
+          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
         }
       });
       const results = await Promise.allSettled(statusPromises);
@@ -1268,26 +1268,26 @@ export class McpServer {
         if (result.status === 'fulfilled') {
           return result.value;
         } else {
-          return ['unknown', { status: 'error', uptime: 0, error: result.reason }];
+          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
         }
       });
       return Object.fromEntries(statusEntries);
     }
     if (!this.config.hasServerConfig(args.language_id)) {
-      return { status: 'not_configured', uptime: 0 };
+      return { status: 'not_configured', uptime: `0ms` };
     }
     const connection = this.client.isServerRunning(args.language_id);
     if (!connection) {
-      return { status: 'stopped', uptime: 0 };
+      return { status: 'stopped', uptime: `0ms` };
     }
     const serverConnection = this.client.getServerConnection(args.language_id);
     const uptime = this.client.getServerUptime(args.language_id);
     if (!serverConnection || !serverConnection.initialized) {
       const project = serverConnection?.name;
-      return { status: 'starting', uptime, languageId: args.language_id, project };
+      return { status: 'starting', uptime: `${uptime}ms`, languageId: args.language_id, project };
     }
     const project = serverConnection.name;
-    return { status: 'ready', uptime, languageId: args.language_id, project };
+    return { status: 'ready', uptime: `${uptime}ms`, languageId: args.language_id, project };
   }
 
   /**
