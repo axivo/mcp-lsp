@@ -209,7 +209,7 @@ export class Client {
     if (cachedProject) {
       return cachedProject;
     }
-    for (const [project, serverConnection] of this.connections) {
+    for (const project of this.connections.keys()) {
       for (const [languageId, runningProject] of this.projectId.entries()) {
         if (runningProject === project) {
           const serverConfig = this.config.getServerConfig(languageId);
@@ -286,7 +286,7 @@ export class Client {
     };
     await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
-    await this.setFilesCache(languageId, project, projectConfig, serverConfig.extensions);
+    await this.setFilesCache(project, projectConfig, serverConfig.extensions);
     const cachedFiles = this.projectFiles.get(project);
     if (cachedFiles && cachedFiles.size) {
       const projectFiles = cachedFiles.get(project);
@@ -453,13 +453,12 @@ export class Client {
    * Sets files cache for a specific project
    * 
    * @private
-   * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {ProjectConfig} projectConfig - Project configuration object
    * @param {string[]} extensions - File extensions
    * @returns {Promise<void>} Promise that resolves when files are cached
    */
-  private async setFilesCache(languageId: string, project: string, projectConfig: any, extensions: string[]): Promise<void> {
+  private async setFilesCache(project: string, projectConfig: any, extensions: string[]): Promise<void> {
     let cachedFiles = this.projectFiles.get(project);
     if (!cachedFiles) {
       cachedFiles = new Map<string, string[]>();
@@ -486,9 +485,9 @@ export class Client {
       this.connections.delete(project);
       this.openedFiles.delete(project);
       this.projectFiles.delete(project);
-      for (const [langId, projectName] of this.projectId.entries()) {
+      for (const [languageId, projectName] of this.projectId.entries()) {
         if (projectName === project) {
-          this.projectId.delete(langId);
+          this.projectId.delete(languageId);
           break;
         }
       }
@@ -557,15 +556,15 @@ export class Client {
    * Checks if a language server is alive and can handle the specified project path
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} projectPath - Project path to validate against server configuration
+   * @param {string} path - Project path to validate against server configuration
    * @returns {boolean} True if server is alive and can handle the project
    */
-  isServerAlive(languageId: string, projectPath: string): boolean {
+  isServerAlive(languageId: string, path: string): boolean {
     const project = this.projectId.get(languageId);
     if (project && this.connections.has(project)) {
       const config = this.config.getServerConfig(languageId);
-      const projectConfig = config.projects.find(p => p.name === project);
-      return projectConfig ? projectPath.startsWith(projectConfig.path) : false;
+      const projectConfig = config.projects.find(id => id.name === project);
+      return projectConfig ? path.startsWith(projectConfig.path) : false;
     }
     return false;
   }
@@ -585,53 +584,53 @@ export class Client {
    * Loads files for a specific project into the language server
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} name - Project name to load
+   * @param {string} project - Project name to load
    * @param {number} timeout - Optional timeout in milliseconds
    * @returns {Promise<any>} Promise that resolves with standardized response
    */
-  async loadProjectFiles(languageId: string, name: string, timeout?: number): Promise<any> {
+  async loadProjectFiles(languageId: string, project: string, timeout?: number): Promise<any> {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
-    const projectConfig = serverConfig.projects.find(project => project.name === name);
+    const projectConfig = serverConfig.projects.find(id => id.name === project);
     if (!projectConfig) {
-      return this.response(`Project '${name}' not found in '${languageId}' language server configuration.`);
+      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
     }
-    if (!this.connections.has(name)) {
-      return this.response(`Language server '${languageId}' is not started for '${name}' project.`);
+    if (!this.connections.has(project)) {
+      return this.response(`Language server '${languageId}' is not started for '${project}' project.`);
     }
-    let cachedFiles = this.projectFiles.get(name);
-    let projectFiles = cachedFiles?.get(name);
+    let cachedFiles = this.projectFiles.get(project);
+    let projectFiles = cachedFiles?.get(project);
     if (!projectFiles) {
-      await this.setFilesCache(languageId, name, projectConfig, serverConfig.extensions);
-      cachedFiles = this.projectFiles.get(name)!;
-      projectFiles = cachedFiles.get(name);
+      await this.setFilesCache(project, projectConfig, serverConfig.extensions);
+      cachedFiles = this.projectFiles.get(project)!;
+      projectFiles = cachedFiles.get(project);
     }
     if (!projectFiles) {
-      return this.response(`Files not found for '${name}' project in '${languageId}' language server.`);
+      return this.response(`Files not found for '${project}' project in '${languageId}' language server.`);
     }
     const timer = Date.now();
     const unopenedFiles = projectFiles.filter(file => {
       const uri = pathToFileURL(file).toString();
-      return !this.openedFiles.get(name)?.has(uri);
+      return !this.openedFiles.get(project)?.has(uri);
     });
     if (unopenedFiles.length) {
       if (timeout) {
-        const message = `Timeout loading ${unopenedFiles.length} files after ${timeout}ms for '${name}' project in '${languageId}' language server`;
+        const message = `Timeout loading ${unopenedFiles.length} files after ${timeout}ms for '${project}' project in '${languageId}' language server`;
         const timeoutPromise = new Promise<void>((_, reject) => setTimeout(() => reject(`${message}.`), timeout));
         try {
-          await Promise.race([this.openFiles(languageId, name, unopenedFiles), timeoutPromise]);
+          await Promise.race([this.openFiles(languageId, project, unopenedFiles), timeoutPromise]);
         } catch (error) {
-          this.openFiles(languageId, name, unopenedFiles.slice(0, 10));
+          this.openFiles(languageId, project, unopenedFiles.slice(0, 10));
           return this.response(`${message}: ${error}`);
         }
       } else {
-        await this.openFiles(languageId, name, unopenedFiles);
+        await this.openFiles(languageId, project, unopenedFiles);
       }
     }
     const elapsed = Date.now() - timer;
-    return this.response(`Successfully loaded ${unopenedFiles.length} files after ${elapsed}ms for '${name}' project in '${languageId}' language server.`);
+    return this.response(`Successfully loaded ${unopenedFiles.length} files after ${elapsed}ms for '${project}' project in '${languageId}' language server.`);
   }
 
   /**
@@ -650,7 +649,7 @@ export class Client {
    * Restarts a specific language server
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} project - Optional project name to restart
+   * @param {string} project - Optional project name
    * @returns {Promise<void>} Promise that resolves when server is restarted
    */
   async restartServer(languageId: string, project?: string): Promise<void> {
@@ -796,19 +795,19 @@ export class Client {
    * Starts a language server for a specific language
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} name - Optional project name to start (defaults to first project)
+   * @param {string} project - Optional project name to start (defaults to first project)
    * @returns {Promise<void>} Promise that resolves when server is started
    */
-  async startServer(languageId: string, name?: string): Promise<void> {
+  async startServer(languageId: string, project?: string): Promise<void> {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
-    const selectedProject = name
-      ? serverConfig.projects.find(project => project.name === name)
+    const selectedProject = project
+      ? serverConfig.projects.find(id => id.name === project)
       : serverConfig.projects[0];
     if (!selectedProject) {
-      return this.response(`Project '${name ?? 'default'}' not found for '${languageId}' language server.`);
+      return this.response(`Project '${project ?? 'default'}' not found for '${languageId}' language server.`);
     }
     if (this.connections.has(selectedProject.name)) {
       return this.response(`Language server '${languageId}' for project '${selectedProject.name}' is already running.`);
@@ -834,7 +833,7 @@ export class Client {
       this.serverStartTimes.set(selectedProject.name, Date.now());
       this.setProcessHandlers(selectedProject.name, childProcess);
       await this.initializeServer(languageId, selectedProject.name);
-      return this.response(`Successfully started language server '${languageId}' for '${selectedProject.name}' project.`);
+      return this.response(`Successfully started '${languageId}' language server for '${selectedProject.name}' project.`);
     } catch (error) {
       return this.response(`Failed to start '${languageId}' language server: ${error}`);
     }
@@ -851,6 +850,14 @@ export class Client {
     if (!serverConnection) {
       return;
     }
+    for (const [languageId, projectName] of this.projectId.entries()) {
+      if (projectName === project) {
+        const serverConfig = this.config.getServerConfig(languageId);
+        await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
+        await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
+        break;
+      }
+    }
     this.connections.delete(project);
     this.openedFiles.delete(project);
     this.projectFiles.delete(project);
@@ -866,26 +873,20 @@ export class Client {
         this.languageIdCache.delete(filePath);
       }
     }
-    try {
-      await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
-      const serverConfig = this.config.getServerConfig('default');
-      await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
-      serverConnection.connection.sendNotification(ExitNotification.method, {});
-      serverConnection.connection.dispose();
-      if (!serverConnection.process.killed) {
-        serverConnection.process.kill('SIGTERM');
-        await new Promise<void>((resolve) => {
-          const handleExit = () => {
-            serverConnection.process.removeListener('exit', handleExit);
-            resolve();
-          };
-          serverConnection.process.on('exit', handleExit);
-        });
-      }
-    } finally {
-      if (!serverConnection.process.killed) {
-        serverConnection.process.kill('SIGKILL');
-      }
+    serverConnection.connection.sendNotification(ExitNotification.method, {});
+    serverConnection.connection.dispose();
+    if (!serverConnection.process.killed) {
+      serverConnection.process.kill('SIGTERM');
+      await new Promise<void>((resolve) => {
+        const handleExit = () => {
+          serverConnection.process.removeListener('exit', handleExit);
+          resolve();
+        };
+        serverConnection.process.on('exit', handleExit);
+      });
+    }
+    if (!serverConnection.process.killed) {
+      serverConnection.process.kill('SIGKILL');
     }
   }
 
