@@ -27,6 +27,7 @@ import {
   DefinitionRequest,
   DocumentColorRequest,
   DocumentFormattingRequest,
+  DocumentHighlightRequest,
   DocumentLinkRequest,
   DocumentRangeFormattingRequest,
   DocumentSymbolRequest,
@@ -87,6 +88,12 @@ interface GetFormatArgs {
 
 interface GetFoldingRangesArgs {
   file_path: string;
+}
+
+interface GetHighlightsArgs {
+  character: number;
+  file_path: string;
+  line: number;
 }
 
 interface GetHoverArgs {
@@ -368,10 +375,10 @@ export class McpServer {
   }
 
   /**
-   * Tool definition for getting document format
+   * Tool definition for getting format
    * 
    * @private
-   * @returns {Tool} Document format tool
+   * @returns {Tool} Format tool
    */
   private getFormatTool(): Tool {
     return {
@@ -383,6 +390,28 @@ export class McpServer {
           file_path: { type: 'string', description: 'Path to the project file' }
         },
         required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting highlights
+   * 
+   * @private
+   * @returns {Tool} Highlights tool
+   */
+  private getHighlightsTool(): Tool {
+    return {
+      name: 'get_highlights',
+      description: 'Get document highlights for symbol at specific position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
     };
   }
@@ -830,6 +859,7 @@ export class McpServer {
       this.getCompletionsTool(),
       this.getFoldingRangesTool(),
       this.getFormatTool(),
+      this.getHighlightsTool(),
       this.getHoverTool(),
       this.getImplementationsTool(),
       this.getIncomingCallsTool(),
@@ -1005,6 +1035,23 @@ export class McpServer {
       options: { tabSize: 2, insertSpaces: true }
     };
     return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
+  }
+
+  /**
+   * Handles get highlights tool requests
+   * 
+   * @private
+   * @param {GetHighlightsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetHighlights(args: GetHighlightsArgs): Promise<any> {
+    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentHighlightRequest.method, params);
   }
 
   /**
@@ -1623,6 +1670,7 @@ export class McpServer {
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
     this.toolHandlers.set('get_format', this.handleGetFormat.bind(this));
+    this.toolHandlers.set('get_highlights', this.handleGetHighlights.bind(this));
     this.toolHandlers.set('get_hover', this.handleGetHover.bind(this));
     this.toolHandlers.set('get_implementations', this.handleGetImplementations.bind(this));
     this.toolHandlers.set('get_incoming_calls', this.handleGetIncomingCalls.bind(this));
