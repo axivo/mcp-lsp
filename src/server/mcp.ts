@@ -24,6 +24,7 @@ import {
   CodeActionParams,
   CodeActionRequest,
   CompletionRequest,
+  CompletionResolveRequest,
   DefinitionRequest,
   DocumentColorRequest,
   DocumentFormattingRequest,
@@ -142,7 +143,7 @@ interface GetOutgoingCallsArgs {
 
 interface GetProjectSymbolsArgs {
   language_id: string;
-  name: string;
+  project: string;
   query: string;
   timeout?: number;
 }
@@ -153,6 +154,11 @@ interface GetRangeFormatArgs {
   file_path: string;
   start_character: number;
   start_line: number;
+}
+
+interface GetResolvesArgs {
+  file_path: string;
+  item: any;
 }
 
 interface GetSelectionRangeArgs {
@@ -225,18 +231,18 @@ interface GetTypeHierarchyArgs {
 
 interface LoadProjectFilesArgs {
   language_id: string;
-  name: string;
+  project: string;
   timeout?: number;
 }
 
 interface RestartServerArgs {
   language_id: string;
-  name?: string;
+  project?: string;
 }
 
 interface StartServerArgs {
   language_id: string;
-  name?: string;
+  project?: string;
 }
 
 interface StopServerArgs {
@@ -606,11 +612,11 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Project name to search within' },
+          project: { type: 'string', description: 'Project name to search within' },
           query: { type: 'string', description: 'Symbol search query' },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
-        required: ['language_id', 'name', 'query']
+        required: ['language_id', 'project', 'query']
       }
     };
   }
@@ -635,6 +641,27 @@ export class McpServer {
           start_line: { type: 'number', description: 'Start line number (zero-based)' }
         },
         required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for resolving completion items
+   * 
+   * @private
+   * @returns {Tool} Completion resolve tool
+   */
+  private getResolvesTool(): Tool {
+    return {
+      name: 'get_resolves',
+      description: 'Get detailed information for a completion item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the completion was obtained' },
+          item: { type: 'object', description: 'Completion item from get_completions tool' }
+        },
+        required: ['file_path', 'item']
       }
     };
   }
@@ -896,6 +923,7 @@ export class McpServer {
       this.getOutgoingCallsTool(),
       this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
+      this.getResolvesTool(),
       this.getSelectionRangeTool(),
       this.getSemanticTokensTool(),
       this.getServerProjectsTool(),
@@ -1058,8 +1086,8 @@ export class McpServer {
     const error = this.validateArgs(args, ['file_path']);
     if (error) return error;
     const params = {
-      textDocument: { uri: `file://${args.file_path}` },
-      options: { tabSize: 2, insertSpaces: true }
+      options: { tabSize: 2, insertSpaces: true },
+      textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
   }
@@ -1160,7 +1188,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetInlayHints(args: GetInlayHintsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'start_line', 'start_character', 'end_line', 'end_character']);
+    const error = this.validateArgs(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
     if (error) return error;
     const params: InlayHintParams = {
       range: {
@@ -1180,7 +1208,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetLinkedEditingRange(args: GetLinkedEditingRangeArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: LinkedEditingRangeParams = {
       position: { character: args.character, line: args.line },
@@ -1233,15 +1261,15 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'name', 'query']);
+    const error = this.validateArgs(args, ['language_id', 'project', 'query']);
     if (error) return error;
     const projectId = this.client.getProjectId(args.language_id);
-    if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.name) {
-      return `Language server '${args.language_id}' for project '${args.name}' is not running.`;
+    if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.project) {
+      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
+    await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
     const params: WorkspaceSymbolParams = { query: args.query };
-    return await this.client.sendRequest(args.language_id, args.name, WorkspaceSymbolRequest.method, params);
+    return await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
   }
 
   /**
@@ -1252,17 +1280,34 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetRangeFormat(args: GetRangeFormatArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'start_line', 'start_character', 'end_line', 'end_character']);
+    const error = this.validateArgs(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
     if (error) return error;
     const params = {
+      options: { tabSize: 2, insertSpaces: true },
       range: {
         start: { character: args.start_character, line: args.start_line },
         end: { character: args.end_character, line: args.end_line }
       },
-      textDocument: { uri: `file://${args.file_path}` },
-      options: { tabSize: 2, insertSpaces: true }
+      textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
+  }
+
+  /**
+   * Handles get resolves tool requests
+   * 
+   * @private
+   * @param {GetResolvesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetResolves(args: GetResolvesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['file_path', 'item']);
+    if (error) return error;
+    const params = {
+      ...args.item,
+      uri: `file://${args.file_path}`
+    };
+    return await this.client.sendServerRequest(args.file_path, CompletionResolveRequest.method, params);
   }
 
   /**
@@ -1273,7 +1318,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSelectionRange(args: GetSelectionRangeArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: SelectionRangeParams = {
       positions: [{ character: args.character, line: args.line }],
@@ -1388,7 +1433,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetSignature(args: GetSignatureArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -1483,9 +1528,9 @@ export class McpServer {
     const error = this.validateArgs(args, ['character', 'file_path', 'line', 'new_name']);
     if (error) return error;
     const params: RenameParams = {
+      newName: args.new_name,
       position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` },
-      newName: args.new_name
+      textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
   }
@@ -1548,7 +1593,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleLoadProjectFiles(args: LoadProjectFilesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'name']);
+    const error = this.validateArgs(args, ['language_id', 'project']);
     if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
@@ -1556,7 +1601,7 @@ export class McpServer {
     if (!this.client.isServerRunning(args.language_id)) {
       return `Language server '${args.language_id}' is not running.`;
     }
-    return await this.client.loadProjectFiles(args.language_id, args.name, args.timeout);
+    return await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
   }
 
   /**
@@ -1588,8 +1633,8 @@ export class McpServer {
   private async handleRestartServer(args: RestartServerArgs): Promise<any> {
     const error = this.validateArgs(args, ['language_id']);
     if (error) return error;
-    await this.client.restartServer(args.language_id, args.name);
-    return `Successfully restarted '${args.language_id}' language server with '${args.name}' project.`;
+    await this.client.restartServer(args.language_id, args.project);
+    return `Successfully restarted '${args.language_id}' language server with '${args.project}' project.`;
   }
 
   /**
@@ -1606,7 +1651,7 @@ export class McpServer {
     if (!serverConfig.command) {
       return `Language server '${args.language_id}' is not configured.`;
     }
-    const project = args.name || serverConfig.projects[0]?.name;
+    const project = args.project ?? serverConfig.projects[0]?.name;
     if (!project) {
       return `No projects configured for '${args.language_id}' language server.`;
     }
@@ -1662,10 +1707,10 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Project name to load all project files from' },
+          project: { type: 'string', description: 'Project name to load all project files from' },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
-        required: ['language_id', 'name']
+        required: ['language_id', 'project']
       }
     };
   }
@@ -1684,7 +1729,7 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
+          project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
       }
@@ -1724,6 +1769,7 @@ export class McpServer {
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
     this.toolHandlers.set('get_project_symbols', this.handleGetProjectSymbols.bind(this));
     this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
+    this.toolHandlers.set('get_resolves', this.handleGetResolves.bind(this));
     this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
     this.toolHandlers.set('get_semantic_tokens', this.handleGetSemanticTokens.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
@@ -1757,7 +1803,7 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          name: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
+          project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
       }
@@ -1796,6 +1842,9 @@ export class McpServer {
     const missing: string[] = [];
     for (const field of fields) {
       const value = args[field];
+      if (field === 'query' && typeof value === 'string' && value === '') {
+        continue;
+      }
       if (value === undefined || value === null || (typeof value === 'string' && value === '')) {
         missing.push(field);
       }
