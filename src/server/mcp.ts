@@ -257,7 +257,7 @@ export class McpServer {
   private getCallHierarchyTool(): Tool {
     return {
       name: 'get_call_hierarchy',
-      description: 'Prepare call hierarchy for the language element',
+      description: 'Build call hierarchy showing caller and callee relationships',
       inputSchema: {
         type: 'object',
         properties: {
@@ -279,7 +279,7 @@ export class McpServer {
   private getCodeActionsTool(): Tool {
     return {
       name: 'get_code_actions',
-      description: 'Get quick fixes and refactoring suggestions at a specific position',
+      description: 'Get automated code fixes and refactoring suggestions at cursor position',
       inputSchema: {
         type: 'object',
         properties: {
@@ -301,7 +301,7 @@ export class McpServer {
   private getCodeResolvesTool(): Tool {
     return {
       name: 'get_code_resolves',
-      description: 'Get detailed information for a code action item',
+      description: 'Resolve additional details for a code action item',
       inputSchema: {
         type: 'object',
         properties: {
@@ -322,7 +322,7 @@ export class McpServer {
   private getColorsTool(): Tool {
     return {
       name: 'get_colors',
-      description: 'Get color information from a document',
+      description: 'Extract color definitions and references from document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -342,7 +342,7 @@ export class McpServer {
   private getCompletionsTool(): Tool {
     return {
       name: 'get_completions',
-      description: 'Get code completion suggestions at a specific position',
+      description: 'Get completions and auto-suggestions at cursor position',
       inputSchema: {
         type: 'object',
         properties: {
@@ -364,7 +364,7 @@ export class McpServer {
   private getFoldingRangesTool(): Tool {
     return {
       name: 'get_folding_ranges',
-      description: 'Get folding ranges for code organization',
+      description: 'Identify collapsible code sections for code editor folding',
       inputSchema: {
         type: 'object',
         properties: {
@@ -384,7 +384,7 @@ export class McpServer {
   private getFormatTool(): Tool {
     return {
       name: 'get_format',
-      description: 'Get document formatting suggestions using language server formatting rules',
+      description: 'Format entire document using language server rules',
       inputSchema: {
         type: 'object',
         properties: {
@@ -404,7 +404,7 @@ export class McpServer {
   private getHighlightsTool(): Tool {
     return {
       name: 'get_highlights',
-      description: 'Get document highlights for symbol at specific position',
+      description: 'Highlight all occurrences of symbol at cursor position',
       inputSchema: {
         type: 'object',
         properties: {
@@ -426,7 +426,7 @@ export class McpServer {
   private getHoverTool(): Tool {
     return {
       name: 'get_hover',
-      description: 'Get hover information and documentation at a specific position',
+      description: 'Show type information and documentation at cursor position',
       inputSchema: {
         type: 'object',
         properties: {
@@ -448,7 +448,7 @@ export class McpServer {
   private getImplementationsTool(): Tool {
     return {
       name: 'get_implementations',
-      description: 'Get all implementation locations',
+      description: 'Find all locations where interface or abstract method is implemented',
       inputSchema: {
         type: 'object',
         properties: {
@@ -470,7 +470,7 @@ export class McpServer {
   private getIncomingCallsTool(): Tool {
     return {
       name: 'get_incoming_calls',
-      description: 'Get incoming calls for a call hierarchy item',
+      description: 'Show all functions that call this symbol',
       inputSchema: {
         type: 'object',
         properties: {
@@ -490,7 +490,7 @@ export class McpServer {
   private getInlayHintsTool(): Tool {
     return {
       name: 'get_inlay_hints',
-      description: 'Get inlay hints for a document range',
+      description: 'Show inline type annotations and parameter hints in code range',
       inputSchema: {
         type: 'object',
         properties: {
@@ -514,7 +514,7 @@ export class McpServer {
   private getInlayHintTool(): Tool {
     return {
       name: 'get_inlay_hint',
-      description: 'Get detailed information for an inlay hint item',
+      description: 'Resolve additional details for an inlay hint item',
       inputSchema: {
         type: 'object',
         properties: {
@@ -535,7 +535,7 @@ export class McpServer {
   private getLinkedEditingRangeTool(): Tool {
     return {
       name: 'get_linked_editing_range',
-      description: 'Find ranges that should be edited together',
+      description: 'Find related ranges that should be edited simultaneously',
       inputSchema: {
         type: 'object',
         properties: {
@@ -557,7 +557,7 @@ export class McpServer {
   private getLinkResolvesTool(): Tool {
     return {
       name: 'get_link_resolves',
-      description: 'Get detailed information for a document link item',
+      description: 'Resolve target URL for a document link item',
       inputSchema: {
         type: 'object',
         properties: {
@@ -578,7 +578,7 @@ export class McpServer {
   private getLinksTool(): Tool {
     return {
       name: 'get_links',
-      description: 'Get document links and references',
+      description: 'Extract clickable links and references from document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -598,7 +598,7 @@ export class McpServer {
   private getOutgoingCallsTool(): Tool {
     return {
       name: 'get_outgoing_calls',
-      description: 'Get outgoing calls for a call hierarchy item',
+      description: 'Show all functions that this symbol calls',
       inputSchema: {
         type: 'object',
         properties: {
@@ -618,11 +618,11 @@ export class McpServer {
   private getProjectSymbolsTool(): Tool {
     return {
       name: 'get_project_symbols',
-      description: 'Search for symbols within a specific project',
+      description: 'Search for symbols across entire project workspace',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
           query: { type: 'string', description: 'Symbol search query' },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
@@ -641,7 +641,7 @@ export class McpServer {
   private getRangeFormatTool(): Tool {
     return {
       name: 'get_range_format',
-      description: 'Get range formatting suggestions using language server formatting rules',
+      description: 'Format specific code range using language server rules',
       inputSchema: {
         type: 'object',
         properties: {
@@ -665,7 +665,7 @@ export class McpServer {
   private getResolvesTool(): Tool {
     return {
       name: 'get_resolves',
-      description: 'Get detailed information for a completion item',
+      description: 'Resolve additional details for a completion item',
       inputSchema: {
         type: 'object',
         properties: {
@@ -686,7 +686,7 @@ export class McpServer {
   private getSelectionRangeTool(): Tool {
     return {
       name: 'get_selection_range',
-      description: 'Smart text selection expansion',
+      description: 'Expand selection to logical code boundaries',
       inputSchema: {
         type: 'object',
         properties: {
@@ -708,7 +708,7 @@ export class McpServer {
   private getSemanticTokensTool(): Tool {
     return {
       name: 'get_semantic_tokens',
-      description: 'Get semantic token information for syntax highlighting and code analysis',
+      description: 'Extract detailed syntax tokens for advanced highlighting and analysis',
       inputSchema: {
         type: 'object',
         properties: {
@@ -728,11 +728,11 @@ export class McpServer {
   private getServerCapabilitiesTool(): Tool {
     return {
       name: 'get_server_capabilities',
-      description: 'Get the capabilities that a language server provides after initialization',
+      description: 'Get language server capabilities and tool mappings',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Language identifier' }
         },
         required: ['language_id']
       }
@@ -748,11 +748,11 @@ export class McpServer {
   private getServerProjectsTool(): Tool {
     return {
       name: 'get_server_projects',
-      description: 'Get available projects for a specific language server',
+      description: 'List available projects for a language server',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Language identifier' }
         },
         required: ['language_id']
       }
@@ -768,11 +768,11 @@ export class McpServer {
   private getServerStatusTool(): Tool {
     return {
       name: 'get_server_status',
-      description: 'Get status of all language servers or a specific language server',
+      description: 'Check running status of language servers',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Optional language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Optional language identifier' }
         },
         required: []
       }
@@ -788,7 +788,7 @@ export class McpServer {
   private getSignatureTool(): Tool {
     return {
       name: 'get_signature',
-      description: 'Get function signature help and parameter information at a specific position',
+      description: 'Show function parameters and signature help at cursor position',
       inputSchema: {
         type: 'object',
         properties: {
@@ -810,7 +810,7 @@ export class McpServer {
   private getSubtypesTool(): Tool {
     return {
       name: 'get_subtypes',
-      description: 'Get subtypes for a type hierarchy item',
+      description: 'Find all subtypes that inherit from this type',
       inputSchema: {
         type: 'object',
         properties: {
@@ -830,7 +830,7 @@ export class McpServer {
   private getSupertypesTool(): Tool {
     return {
       name: 'get_supertypes',
-      description: 'Get supertypes for a type hierarchy item',
+      description: 'Find all parent types that this type inherits from',
       inputSchema: {
         type: 'object',
         properties: {
@@ -850,7 +850,7 @@ export class McpServer {
   private getSymbolDefinitionsTool(): Tool {
     return {
       name: 'get_symbol_definitions',
-      description: 'Get all project symbol definition locations',
+      description: 'Navigate to where symbol is originally defined',
       inputSchema: {
         type: 'object',
         properties: {
@@ -872,7 +872,7 @@ export class McpServer {
   private getSymbolReferencesTool(): Tool {
     return {
       name: 'get_symbol_references',
-      description: 'Get all project symbol usage locations',
+      description: 'Find all locations where symbol is used or referenced',
       inputSchema: {
         type: 'object',
         properties: {
@@ -895,7 +895,7 @@ export class McpServer {
   private getSymbolRenamesTool(): Tool {
     return {
       name: 'get_symbol_renames',
-      description: 'Get all project symbol rename suggestions',
+      description: 'Preview all locations that would be renamed with symbol',
       inputSchema: {
         type: 'object',
         properties: {
@@ -918,7 +918,7 @@ export class McpServer {
   private getSymbolsTool(): Tool {
     return {
       name: 'get_symbols',
-      description: 'Get symbols across entire document',
+      description: 'List all symbols in document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -987,7 +987,7 @@ export class McpServer {
   private getTypeDefinitionsTool(): Tool {
     return {
       name: 'get_type_definitions',
-      description: 'Get all type definition locations',
+      description: 'Navigate to where symbol type is defined',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1009,7 +1009,7 @@ export class McpServer {
   private getTypeHierarchyTool(): Tool {
     return {
       name: 'get_type_hierarchy',
-      description: 'Prepare type hierarchy for the language element',
+      description: 'Build type hierarchy showing inheritance relationships',
       inputSchema: {
         type: 'object',
         properties: {
@@ -1812,11 +1812,11 @@ export class McpServer {
   private loadProjectFilesTool(): Tool {
     return {
       name: 'load_project_files',
-      description: 'Load all project files into language server for comprehensive analysis',
+      description: 'Load all project files into language server for full workspace analysis',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to load all project files from' },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
@@ -1834,11 +1834,11 @@ export class McpServer {
   private restartServerTool(): Tool {
     return {
       name: 'restart_server',
-      description: 'Restart a specific language server',
+      description: 'Restart language server with optional project selection',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
@@ -1943,11 +1943,11 @@ export class McpServer {
   private startServerTool(): Tool {
     return {
       name: 'start_server',
-      description: 'Start a specific language server',
+      description: 'Start language server with project selection',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
         },
         required: ['language_id']
@@ -1964,11 +1964,11 @@ export class McpServer {
   private stopServerTool(): Tool {
     return {
       name: 'stop_server',
-      description: 'Stop a specific language server',
+      description: 'Stop running language server',
       inputSchema: {
         type: 'object',
         properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+          language_id: { type: 'string', description: 'Language identifier' }
         },
         required: ['language_id']
       }
