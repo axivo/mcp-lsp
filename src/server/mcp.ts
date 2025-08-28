@@ -1190,10 +1190,7 @@ export class McpServer {
     const params: CallHierarchyIncomingCallsParams = {
       item: args.item
     };
-    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
-    if (!filePath) {
-      return 'Invalid call hierarchy item: missing URI';
-    }
+    const filePath = this.setFilePath(args.item);
     return await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
   }
 
@@ -1276,10 +1273,7 @@ export class McpServer {
     const params: CallHierarchyOutgoingCallsParams = {
       item: args.item
     };
-    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
-    if (!filePath) {
-      return 'Invalid call hierarchy item: missing URI';
-    }
+    const filePath = this.setFilePath(args.item);
     return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
   }
 
@@ -1506,10 +1500,7 @@ export class McpServer {
     const params: TypeHierarchySubtypesParams = {
       item: args.item
     };
-    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
-    if (!filePath) {
-      return 'Invalid type hierarchy item: missing URI';
-    }
+    const filePath = this.setFilePath(args.item);
     return await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
   }
 
@@ -1526,10 +1517,7 @@ export class McpServer {
     const params: TypeHierarchySupertypesParams = {
       item: args.item
     };
-    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
-    if (!filePath) {
-      return 'Invalid type hierarchy item: missing URI';
-    }
+    const filePath = this.setFilePath(args.item);
     return await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
   }
 
@@ -1788,6 +1776,23 @@ export class McpServer {
   }
 
   /**
+   * Extracts file path from URI and validates it
+   * 
+   * @private
+   * @param {object} item - Object containing name and optional uri property
+   * @param {string} item.name - Name identifier for the item
+   * @param {string} [item.uri] - URI to extract file path from
+   * @returns {string} File path without 'file://' prefix
+   * @throws {string} Error message if URI is missing or invalid
+   */
+  private setFilePath(item: { name: string, uri?: string }): string {
+    if (!item.uri) {
+      return `Invalid '${item.name}' item: missing URI`;
+    }
+    return item.uri.replace('file://', '');
+  }
+
+  /**
    * Sets up MCP request handlers for tool execution and tool listing
    * 
    * @private
@@ -1893,7 +1898,11 @@ export class McpServer {
   private validateArgs(args: unknown, fields: string[]): string | null {
     const type: Record<string, z.ZodType> = {};
     for (const field of fields) {
-      type[field] = field === 'query' ? z.string() : z.string().min(1);
+      if (field === 'query') {
+        type[field] = z.string();
+      } else {
+        type[field] = z.union([z.number(), z.string().min(1)]);
+      }
     }
     const schema = z.object(type);
     const result = schema.safeParse(args);
