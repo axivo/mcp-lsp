@@ -6,6 +6,7 @@
  * @license BSD-3-Clause
  */
 
+import { deepmerge } from 'deepmerge-ts';
 import fg from 'fast-glob';
 import gracefulFs from 'graceful-fs';
 import { ChildProcess, spawn } from 'node:child_process';
@@ -26,6 +27,8 @@ import {
   ClientCapabilities,
   CodeActionRequest,
   CompletionRequest,
+  ConfigurationParams,
+  ConfigurationRequest,
   DefinitionRequest,
   DidChangeWorkspaceFoldersNotification,
   DidOpenTextDocumentNotification,
@@ -48,6 +51,7 @@ import {
   RegistrationRequest,
   RenameRequest,
   SelectionRangeRequest,
+  ShowMessageParams,
   ShowMessageRequest,
   ShutdownRequest,
   SignatureHelpRequest,
@@ -88,7 +92,6 @@ export class Client {
   private projectId = new Map<string, string>();
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
-  private fileReadLimit: any;
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
 
@@ -99,8 +102,6 @@ export class Client {
    */
   constructor(configPath: string) {
     this.config = new Config(configPath);
-    const defaultSettings = this.config.getServerConfig('default').settings;
-    this.fileReadLimit = pLimit(defaultSettings.maxConcurrentFileReads);
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -145,8 +146,13 @@ export class Client {
     );
     connection.onError(() => { });
     const serverConfig = this.config.getServerConfig(languageId);
+    if (serverConfig.settings.configurationRequest === true) {
+      connection.onRequest(ConfigurationRequest.method, (params: ConfigurationParams) => {
+        return [serverConfig.configuration ?? {}];
+      });
+    }
     if (serverConfig.settings.messageRequest === false) {
-      connection.onRequest(ShowMessageRequest.method, (params: any) => {
+      connection.onRequest(ShowMessageRequest.method, (params: ShowMessageParams) => {
         return null;
       });
     }
@@ -213,7 +219,7 @@ export class Client {
       for (const [languageId, runningProject] of this.projectId.entries()) {
         if (runningProject === project) {
           const serverConfig = this.config.getServerConfig(languageId);
-          const projectConfig = serverConfig.projects.find(p => p.name === project);
+          const projectConfig = serverConfig.projects.find(id => id.name === project);
           if (projectConfig && absolutePath.startsWith(projectConfig.path)) {
             for (const extension of serverConfig.extensions) {
               if (filePath.endsWith(extension)) {
@@ -242,7 +248,7 @@ export class Client {
       return;
     }
     const serverConfig = this.config.getServerConfig(languageId);
-    const projectConfig = serverConfig.projects.find(p => p.name === project)!;
+    const projectConfig = serverConfig.projects.find(id => id.name === project)!;
     const workspaceFolders: WorkspaceFolder[] = [{
       name: projectConfig.name,
       uri: pathToFileURL(projectConfig.path).toString()
@@ -267,18 +273,18 @@ export class Client {
   private async initializeServer(languageId: string, project: string): Promise<void> {
     const serverConnection = this.connections.get(project)!;
     const serverConfig = this.config.getServerConfig(languageId);
-    const projectConfig = serverConfig.projects.find(p => p.name === project)!;
+    const projectConfig = serverConfig.projects.find(id => id.name === project)!;
     const workspaceFolders: WorkspaceFolder[] = [{
       name: projectConfig.name,
       uri: pathToFileURL(projectConfig.path).toString()
     }];
     const initParams: InitializeParams = {
-      capabilities: this.setClientCapabilities(),
+      capabilities: this.setClientCapabilities(projectConfig),
       clientInfo: {
         name: 'mcp-lsp-client',
         version: this.version(),
       },
-      initializationOptions: serverConfig.configuration ? { [languageId]: serverConfig.configuration } : {},
+      initializationOptions: serverConfig.configuration ?? {},
       processId: process.pid,
       rootPath: projectConfig.path,
       rootUri: pathToFileURL(projectConfig.path).toString(),
@@ -357,8 +363,10 @@ export class Client {
     if (files.length === 0) {
       return;
     }
+    const serverConfig = this.config.getServerConfig(languageId);
+    const fileReadLimit = pLimit(serverConfig.settings.maxConcurrentFileReads);
     const openFiles = files.map(file =>
-      this.fileReadLimit(() => this.openFile(languageId, project, file))
+      fileReadLimit(() => this.openFile(languageId, project, file))
     );
     await Promise.allSettled(openFiles);
   }
@@ -367,11 +375,12 @@ export class Client {
      * Sets comprehensive client capabilities for LSP features
      * 
      * @private
+     * @param {ProjectConfig} projectConfig - Optional project configuration for capability overrides
      * @returns {ClientCapabilities} Client capabilities
      */
-  private setClientCapabilities(): ClientCapabilities {
-    return {
-      general: { positionEncodings: ['utf-16', 'utf-8'] },
+  private setClientCapabilities(projectConfig?: ProjectConfig): ClientCapabilities {
+    const capabilities: ClientCapabilities = {
+      general: { positionEncodings: ['utf-8', 'utf-16'] },
       textDocument: {
         callHierarchy: { dynamicRegistration: false },
         codeAction: {
@@ -386,7 +395,7 @@ export class Client {
           completionItem: {
             deprecatedSupport: true,
             insertReplaceSupport: true,
-            resolveSupport: { properties: ['additionalTextEdits', 'documentation', 'detail'] },
+            resolveSupport: { properties: ['additionalTextEdits', 'detail', 'documentation'] },
             snippetSupport: true,
             tagSupport: { valueSet: [1] }
           },
@@ -447,6 +456,7 @@ export class Client {
         workspaceFolders: true
       }
     };
+    return deepmerge(capabilities, projectConfig?.capabilities ?? {});
   }
 
   /**

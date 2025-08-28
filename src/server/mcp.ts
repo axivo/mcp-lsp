@@ -17,12 +17,14 @@ import {
 import {
   CallHierarchyIncomingCallsParams,
   CallHierarchyIncomingCallsRequest,
+  CallHierarchyItem,
   CallHierarchyOutgoingCallsParams,
   CallHierarchyOutgoingCallsRequest,
   CallHierarchyPrepareParams,
   CallHierarchyPrepareRequest,
   CodeActionParams,
   CodeActionRequest,
+  CompletionItem,
   CompletionRequest,
   CompletionResolveRequest,
   DefinitionRequest,
@@ -35,6 +37,7 @@ import {
   FoldingRangeRequest,
   HoverRequest,
   ImplementationRequest,
+  InlayHint,
   InlayHintParams,
   InlayHintRequest,
   InlayHintResolveRequest,
@@ -51,6 +54,7 @@ import {
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
+  TypeHierarchyItem,
   TypeHierarchyPrepareParams,
   TypeHierarchyPrepareRequest,
   TypeHierarchySubtypesParams,
@@ -60,6 +64,7 @@ import {
   WorkspaceSymbolParams,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
+import { z } from 'zod';
 import { Client } from './client.js';
 import { Config } from './config.js';
 
@@ -112,11 +117,12 @@ interface GetImplementationsArgs {
 }
 
 interface GetIncomingCallsArgs {
-  item: any;
+  item: CallHierarchyItem;
 }
 
 interface GetInlayHintArgs {
-  item: any;
+  file_path: string;
+  item: InlayHint;
 }
 
 interface GetInlayHintsArgs {
@@ -138,7 +144,7 @@ interface GetLinksArgs {
 }
 
 interface GetOutgoingCallsArgs {
-  item: any;
+  item: CallHierarchyItem;
 }
 
 interface GetProjectSymbolsArgs {
@@ -158,7 +164,7 @@ interface GetRangeFormatArgs {
 
 interface GetResolvesArgs {
   file_path: string;
-  item: any;
+  item: CompletionItem;
 }
 
 interface GetSelectionRangeArgs {
@@ -186,11 +192,11 @@ interface GetSignatureArgs {
 }
 
 interface GetSubtypesArgs {
-  item: any;
+  item: TypeHierarchyItem;
 }
 
 interface GetSupertypesArgs {
-  item: any;
+  item: TypeHierarchyItem;
 }
 
 interface GetSymbolDefinitionsArgs {
@@ -529,9 +535,10 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the inlay hint was obtained' },
           item: { type: 'object', description: 'Inlay hint item from get_inlay_hints tool' }
         },
-        required: ['item']
+        required: ['file_path', 'item']
       }
     };
   }
@@ -1171,13 +1178,9 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetInlayHint(args: GetInlayHintArgs): Promise<any> {
-    const error = this.validateArgs(args, ['item']);
+    const error = this.validateArgs(args, ['file_path', 'item']);
     if (error) return error;
-    const filePath = args.item.uri ? args.item.uri.replace('file://', '') : null;
-    if (!filePath) {
-      return 'Invalid inlay hint item: missing URI';
-    }
-    return await this.client.sendServerRequest(filePath, InlayHintResolveRequest.method, args.item);
+    return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
   }
 
   /**
@@ -1834,22 +1837,19 @@ export class McpServer {
    * Validates required arguments for tool handler methods
    * 
    * @private
-   * @param {any} args - The arguments object to validate
-   * @param {string[]} fields - Array of required field names
+   * @param {unknown} args - Tool arguments to validate
+   * @param {string[]} fields - Required field names
    * @returns {string | null} Error message if validation fails, null if all required fields are present
    */
-  private validateArgs(args: any, fields: string[]): string | null {
-    const missing: string[] = [];
+  private validateArgs(args: unknown, fields: string[]): string | null {
+    const type: Record<string, z.ZodType> = {};
     for (const field of fields) {
-      const value = args[field];
-      if (field === 'query' && typeof value === 'string' && value === '') {
-        continue;
-      }
-      if (value === undefined || value === null || (typeof value === 'string' && value === '')) {
-        missing.push(field);
-      }
+      type[field] = field === 'query' ? z.string() : z.string().min(1);
     }
-    if (missing.length) {
+    const schema = z.object(type);
+    const result = schema.safeParse(args);
+    if (!result.success) {
+      const missing = result.error.issues.map(issue => issue.path[0]);
       return `Missing required arguments: ${missing.join(', ')}`;
     }
     return null;
