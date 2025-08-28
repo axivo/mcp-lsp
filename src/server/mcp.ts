@@ -147,6 +147,11 @@ interface GetOutgoingCallsArgs {
   item: CallHierarchyItem;
 }
 
+interface GetProjectCapabilitiesArgs {
+  language_id: string;
+  project: string;
+}
+
 interface GetProjectSymbolsArgs {
   language_id: string;
   project: string;
@@ -606,6 +611,27 @@ export class McpServer {
   }
 
   /**
+   * Tool definition for getting project capabilities
+   * 
+   * @private
+   * @returns {Tool} Project capabilities tool
+   */
+  private getProjectCapabilitiesTool(): Tool {
+    return {
+      name: 'get_project_capabilities',
+      description: 'Get the client capabilities configuration for a specific project',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
+          project: { type: 'string', description: 'Project name to get capabilities for' }
+        },
+        required: ['language_id', 'project']
+      }
+    };
+  }
+
+  /**
    * Tool definition for project symbol search
    * 
    * @private
@@ -928,6 +954,7 @@ export class McpServer {
       this.getLinkedEditingRangeTool(),
       this.getLinksTool(),
       this.getOutgoingCallsTool(),
+      this.getProjectCapabilitiesTool(),
       this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
       this.getResolvesTool(),
@@ -1254,6 +1281,27 @@ export class McpServer {
       return 'Invalid call hierarchy item: missing URI';
     }
     return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
+  }
+
+  /**
+   * Handles get project capabilities tool requests
+   * 
+   * @private
+   * @param {GetProjectCapabilitiesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetProjectCapabilities(args: GetProjectCapabilitiesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['language_id', 'project']);
+    if (error) return error;
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured.`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projectConfig = serverConfig.projects.find(p => p.name === args.project);
+    if (!projectConfig) {
+      return `Project '${args.project}' not found in '${args.language_id}' language server configuration.`;
+    }
+    return this.client.setClientCapabilities(projectConfig);
   }
 
   /**
@@ -1770,6 +1818,7 @@ export class McpServer {
     this.toolHandlers.set('get_linked_editing_range', this.handleGetLinkedEditingRange.bind(this));
     this.toolHandlers.set('get_links', this.handleGetLinks.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
+    this.toolHandlers.set('get_project_capabilities', this.handleGetProjectCapabilities.bind(this));
     this.toolHandlers.set('get_project_symbols', this.handleGetProjectSymbols.bind(this));
     this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
     this.toolHandlers.set('get_resolves', this.handleGetResolves.bind(this));
