@@ -154,11 +154,6 @@ interface GetOutgoingCallsArgs {
   item: CallHierarchyItem;
 }
 
-interface GetProjectCapabilitiesArgs {
-  language_id: string;
-  project: string;
-}
-
 interface GetProjectSymbolsArgs {
   language_id: string;
   project: string;
@@ -187,6 +182,10 @@ interface GetSelectionRangeArgs {
 
 interface GetSemanticTokensArgs {
   file_path: string;
+}
+
+interface GetServerCapabilitiesArgs {
+  language_id: string;
 }
 
 interface GetServerProjectsArgs {
@@ -639,27 +638,6 @@ export class McpServer {
   }
 
   /**
-   * Tool definition for getting project capabilities
-   * 
-   * @private
-   * @returns {Tool} Project capabilities tool
-   */
-  private getProjectCapabilitiesTool(): Tool {
-    return {
-      name: 'get_project_capabilities',
-      description: 'Get the client capabilities configuration for a specific project',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' },
-          project: { type: 'string', description: 'Project name to get capabilities for' }
-        },
-        required: ['language_id', 'project']
-      }
-    };
-  }
-
-  /**
    * Tool definition for project symbol search
    * 
    * @private
@@ -765,6 +743,26 @@ export class McpServer {
           file_path: { type: 'string', description: 'Path to the project file' }
         },
         required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting server capabilities
+   * 
+   * @private
+   * @returns {Tool} Server capabilities tool
+   */
+  private getServerCapabilitiesTool(): Tool {
+    return {
+      name: 'get_server_capabilities',
+      description: 'Get the capabilities that a language server provides after initialization',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier (e.g., python, typescript)' }
+        },
+        required: ['language_id']
       }
     };
   }
@@ -983,12 +981,12 @@ export class McpServer {
       this.getLinkedEditingRangeTool(),
       this.getLinksTool(),
       this.getOutgoingCallsTool(),
-      this.getProjectCapabilitiesTool(),
       this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
       this.getResolvesTool(),
       this.getSelectionRangeTool(),
       this.getSemanticTokensTool(),
+      this.getServerCapabilitiesTool(),
       this.getServerProjectsTool(),
       this.getServerStatusTool(),
       this.getSignatureTool(),
@@ -1320,27 +1318,6 @@ export class McpServer {
   }
 
   /**
-   * Handles get project capabilities tool requests
-   * 
-   * @private
-   * @param {GetProjectCapabilitiesArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  private async handleGetProjectCapabilities(args: GetProjectCapabilitiesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projectConfig = serverConfig.projects.find(p => p.name === args.project);
-    if (!projectConfig) {
-      return `Project '${args.project}' not found in '${args.language_id}' language server configuration.`;
-    }
-    return this.client.setClientCapabilities(projectConfig);
-  }
-
-  /**
    * Handles project symbol search tool requests
    * 
    * @private
@@ -1428,6 +1405,30 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, SemanticTokensRequest.method, params);
+  }
+
+  /**
+   * Handles get server capabilities tool requests
+   * 
+   * @private
+   * @param {GetServerCapabilitiesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetServerCapabilities(args: GetServerCapabilitiesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['language_id']);
+    if (error) return error;
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured.`;
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    const project = this.client.getProjectId(args.language_id);
+    const capabilities = this.client.getServerCapabilities(args.language_id);
+    if (!capabilities) {
+      return `Capabilities not available for '${args.language_id}' language server.`;
+    }
+    return { language_id: args.language_id, project, capabilities };
   }
 
   /**
@@ -1866,12 +1867,12 @@ export class McpServer {
     this.toolHandlers.set('get_linked_editing_range', this.handleGetLinkedEditingRange.bind(this));
     this.toolHandlers.set('get_links', this.handleGetLinks.bind(this));
     this.toolHandlers.set('get_outgoing_calls', this.handleGetOutgoingCalls.bind(this));
-    this.toolHandlers.set('get_project_capabilities', this.handleGetProjectCapabilities.bind(this));
     this.toolHandlers.set('get_project_symbols', this.handleGetProjectSymbols.bind(this));
     this.toolHandlers.set('get_range_format', this.handleGetRangeFormat.bind(this));
     this.toolHandlers.set('get_resolves', this.handleGetResolves.bind(this));
     this.toolHandlers.set('get_selection_range', this.handleGetSelectionRange.bind(this));
     this.toolHandlers.set('get_semantic_tokens', this.handleGetSemanticTokens.bind(this));
+    this.toolHandlers.set('get_server_capabilities', this.handleGetServerCapabilities.bind(this));
     this.toolHandlers.set('get_server_projects', this.handleGetServerProjects.bind(this));
     this.toolHandlers.set('get_server_status', this.handleGetServerStatus.bind(this));
     this.toolHandlers.set('get_signature', this.handleGetSignature.bind(this));

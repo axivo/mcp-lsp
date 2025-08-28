@@ -44,6 +44,7 @@ import {
   InitializedNotification,
   InitializeParams,
   InitializeRequest,
+  InitializeResult,
   InlayHintRequest,
   LinkedEditingRangeRequest,
   ReferencesRequest,
@@ -51,6 +52,7 @@ import {
   RegistrationRequest,
   RenameRequest,
   SelectionRangeRequest,
+  ServerCapabilities,
   ShowMessageParams,
   ShowMessageRequest,
   ShutdownRequest,
@@ -68,10 +70,11 @@ import {
 import { Config, ProjectConfig } from './config.js';
 
 interface ServerConnection {
+  capabilities?: ServerCapabilities;
   connection: MessageConnection;
-  process: ChildProcess;
   initialized: boolean;
   name: string;
+  process: ChildProcess;
 }
 
 /**
@@ -279,7 +282,7 @@ export class Client {
       uri: pathToFileURL(projectConfig.path).toString()
     }];
     const initParams: InitializeParams = {
-      capabilities: this.setClientCapabilities(projectConfig),
+      capabilities: this.setClientCapabilities(languageId),
       clientInfo: {
         name: 'mcp-lsp-client',
         version: this.version(),
@@ -290,7 +293,8 @@ export class Client {
       rootUri: pathToFileURL(projectConfig.path).toString(),
       workspaceFolders
     };
-    await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
+    const initializeResult: InitializeResult = await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
+    serverConnection.capabilities = initializeResult.capabilities;
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
     await this.setFilesCache(project, projectConfig, serverConfig.extensions);
     const cachedFiles = this.projectFiles.get(project);
@@ -372,6 +376,95 @@ export class Client {
   }
 
   /**
+  * Sets client capabilities for LSP features
+  * 
+  * @private
+  * @param {string} languageId - Language identifier for server-specific capabilities
+  * @returns {ClientCapabilities} Client capabilities
+  */
+  private setClientCapabilities(languageId: string): ClientCapabilities {
+    const capabilities: ClientCapabilities = {
+      general: { positionEncodings: ['utf-8', 'utf-16'] },
+      textDocument: {
+        callHierarchy: { dynamicRegistration: false },
+        codeAction: {
+          dataSupport: true,
+          disabledSupport: true,
+          dynamicRegistration: false,
+          isPreferredSupport: true,
+          resolveSupport: { properties: ['edit'] }
+        },
+        completion: {
+          dynamicRegistration: false,
+          completionItem: {
+            deprecatedSupport: true,
+            insertReplaceSupport: true,
+            resolveSupport: { properties: ['additionalTextEdits', 'detail', 'documentation'] },
+            snippetSupport: true,
+            tagSupport: { valueSet: [1] }
+          },
+          completionItemKind: {}
+        },
+        colorProvider: { dynamicRegistration: false },
+        definition: { dynamicRegistration: false },
+        documentLink: { dynamicRegistration: false },
+        documentSymbol: { dynamicRegistration: false },
+        foldingRange: { dynamicRegistration: false },
+        formatting: { dynamicRegistration: false },
+        hover: {
+          dynamicRegistration: false,
+          contentFormat: ['markdown', 'plaintext']
+        },
+        implementation: { dynamicRegistration: false },
+        inlayHint: { dynamicRegistration: false },
+        linkedEditingRange: { dynamicRegistration: false },
+        rangeFormatting: { dynamicRegistration: false },
+        references: { dynamicRegistration: false },
+        rename: { dynamicRegistration: false },
+        selectionRange: { dynamicRegistration: false },
+        signatureHelp: {
+          contextSupport: true,
+          dynamicRegistration: false,
+          signatureInformation: {
+            documentationFormat: ['markdown', 'plaintext'],
+            parameterInformation: { labelOffsetSupport: true },
+            activeParameterSupport: true
+          }
+        },
+        synchronization: {
+          didSave: true,
+          dynamicRegistration: false,
+          willSave: true,
+          willSaveWaitUntil: true
+        },
+        typeDefinition: { dynamicRegistration: false },
+        typeHierarchy: { dynamicRegistration: false }
+      },
+      workspace: {
+        applyEdit: true,
+        configuration: true,
+        didChangeConfiguration: { dynamicRegistration: false },
+        didChangeWatchedFiles: { dynamicRegistration: false },
+        executeCommand: { dynamicRegistration: false },
+        symbol: {
+          dynamicRegistration: false,
+          symbolKind: {
+            valueSet: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
+          }
+        },
+        workspaceEdit: {
+          documentChanges: true,
+          failureHandling: 'textOnlyTransactional',
+          resourceOperations: ['create', 'delete', 'rename']
+        },
+        workspaceFolders: true
+      }
+    };
+    const serverConfig = this.config.getServerConfig(languageId);
+    return deepmerge(capabilities, serverConfig.capabilities ?? {});
+  }
+
+  /**
    * Sets files cache for a specific project
    * 
    * @private
@@ -432,6 +525,21 @@ export class Client {
    */
   getProjectId(languageId: string): string | undefined {
     return this.projectId.get(languageId);
+  }
+
+  /**
+   * Gets server capabilities for a specific language server
+   *
+   * @param {string} languageId - Language identifier
+   * @returns {ServerCapabilities | undefined} Server capabilities or undefined if not available
+   */
+  getServerCapabilities(languageId: string): ServerCapabilities | undefined {
+    const project = this.projectId.get(languageId);
+    if (project) {
+      const serverConnection = this.connections.get(project);
+      return serverConnection?.capabilities;
+    }
+    return undefined;
   }
 
   /**
@@ -699,93 +807,6 @@ export class Client {
       }
     }
     return 'Language server not found for file.';
-  }
-
-  /**
-  * Sets client capabilities for LSP features
-  * 
-  * @param {ProjectConfig} projectConfig - Optional project configuration for capability overrides
-  * @returns {ClientCapabilities} Client capabilities
-  */
-  setClientCapabilities(projectConfig?: ProjectConfig): ClientCapabilities {
-    const capabilities: ClientCapabilities = {
-      general: { positionEncodings: ['utf-8', 'utf-16'] },
-      textDocument: {
-        callHierarchy: { dynamicRegistration: false },
-        codeAction: {
-          dataSupport: true,
-          disabledSupport: true,
-          dynamicRegistration: false,
-          isPreferredSupport: true,
-          resolveSupport: { properties: ['edit'] }
-        },
-        completion: {
-          dynamicRegistration: false,
-          completionItem: {
-            deprecatedSupport: true,
-            insertReplaceSupport: true,
-            resolveSupport: { properties: ['additionalTextEdits', 'detail', 'documentation'] },
-            snippetSupport: true,
-            tagSupport: { valueSet: [1] }
-          },
-          completionItemKind: {}
-        },
-        colorProvider: { dynamicRegistration: false },
-        definition: { dynamicRegistration: false },
-        documentLink: { dynamicRegistration: false },
-        documentSymbol: { dynamicRegistration: false },
-        foldingRange: { dynamicRegistration: false },
-        formatting: { dynamicRegistration: false },
-        hover: {
-          dynamicRegistration: false,
-          contentFormat: ['markdown', 'plaintext']
-        },
-        implementation: { dynamicRegistration: false },
-        inlayHint: { dynamicRegistration: false },
-        linkedEditingRange: { dynamicRegistration: false },
-        rangeFormatting: { dynamicRegistration: false },
-        references: { dynamicRegistration: false },
-        rename: { dynamicRegistration: false },
-        selectionRange: { dynamicRegistration: false },
-        signatureHelp: {
-          contextSupport: true,
-          dynamicRegistration: false,
-          signatureInformation: {
-            documentationFormat: ['markdown', 'plaintext'],
-            parameterInformation: { labelOffsetSupport: true },
-            activeParameterSupport: true
-          }
-        },
-        synchronization: {
-          didSave: true,
-          dynamicRegistration: false,
-          willSave: true,
-          willSaveWaitUntil: true
-        },
-        typeDefinition: { dynamicRegistration: false },
-        typeHierarchy: { dynamicRegistration: false }
-      },
-      workspace: {
-        applyEdit: true,
-        configuration: true,
-        didChangeConfiguration: { dynamicRegistration: false },
-        didChangeWatchedFiles: { dynamicRegistration: false },
-        executeCommand: { dynamicRegistration: false },
-        symbol: {
-          dynamicRegistration: false,
-          symbolKind: {
-            valueSet: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24, 25, 26]
-          }
-        },
-        workspaceEdit: {
-          documentChanges: true,
-          failureHandling: 'textOnlyTransactional',
-          resourceOperations: ['create', 'delete', 'rename']
-        },
-        workspaceFolders: true
-      }
-    };
-    return deepmerge(capabilities, projectConfig?.capabilities ?? {});
   }
 
   /**

@@ -14,10 +14,9 @@ interface GlobalConfig {
 }
 
 export interface ProjectConfig {
+  description?: string;
   name: string;
   path: string;
-  capabilities?: Partial<ClientCapabilities>;
-  description?: string;
   patterns?: {
     exclude?: string[];
     include?: string[];
@@ -27,10 +26,11 @@ export interface ProjectConfig {
 
 interface ServerConfig {
   args: string[];
+  capabilities?: Partial<ClientCapabilities>;
   command: string;
+  configuration?: Record<string, unknown>;
   extensions: string[];
   projects: ProjectConfig[];
-  configuration?: Record<string, any>;
   settings?: {
     configurationRequest?: boolean;
     maxConcurrentFileReads?: number;
@@ -111,6 +111,11 @@ export class Config {
       if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
         return false;
       }
+      if (serverConfig.capabilities !== undefined) {
+        if (typeof serverConfig.capabilities !== 'object' || serverConfig.capabilities === null || Array.isArray(serverConfig.capabilities)) {
+          return false;
+        }
+      }
       if (serverConfig.configuration !== undefined &&
         (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))
       ) {
@@ -145,11 +150,6 @@ export class Config {
         }
         if (typeof project.name !== 'string' || project.name.trim() === '') {
           return false;
-        }
-        if (project.capabilities !== undefined) {
-          if (typeof project.capabilities !== 'object' || project.capabilities === null || Array.isArray(project.capabilities)) {
-            return false;
-          }
         }
         if (project.description !== undefined && (typeof project.description !== 'string' || project.description.trim() === '')) {
           return false;
@@ -190,7 +190,9 @@ export class Config {
    */
   getServerConfig(languageId: string): {
     args: string[];
+    capabilities?: Partial<ClientCapabilities>;
     command: string;
+    configuration?: Record<string, unknown>;
     extensions: string[];
     projects: ProjectConfig[];
     settings: {
@@ -203,7 +205,6 @@ export class Config {
       shutdownGracePeriodMs: number;
       workspace: boolean;
     };
-    configuration?: Record<string, any>;
   } {
     const serverConfig = this.config.servers[languageId];
     if (!serverConfig) {
@@ -227,7 +228,9 @@ export class Config {
     }
     return {
       args: serverConfig.args,
+      capabilities: serverConfig.capabilities,
       command: serverConfig.command,
+      configuration: serverConfig.configuration,
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
       settings: {
@@ -239,8 +242,7 @@ export class Config {
         registrationRequest: serverConfig.settings?.registrationRequest ?? true,
         shutdownGracePeriodMs: serverConfig.settings?.shutdownGracePeriodMs ?? 100,
         workspace: serverConfig.settings?.workspace ?? true
-      },
-      configuration: serverConfig.configuration
+      }
     };
   }
 
