@@ -22,8 +22,10 @@ import {
   CallHierarchyOutgoingCallsRequest,
   CallHierarchyPrepareParams,
   CallHierarchyPrepareRequest,
+  CodeAction,
   CodeActionParams,
   CodeActionRequest,
+  CodeActionResolveRequest,
   CompletionItem,
   CompletionRequest,
   CompletionResolveRequest,
@@ -78,6 +80,11 @@ interface GetCodeActionsArgs {
   character: number;
   file_path: string;
   line: number;
+}
+
+interface GetCodeResolvesArgs {
+  file_path: string;
+  item: CodeAction;
 }
 
 interface GetColorsArgs {
@@ -331,6 +338,27 @@ export class McpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for resolving code actions
+   * 
+   * @private
+   * @returns {Tool} Code action resolve tool
+   */
+  private getCodeResolvesTool(): Tool {
+    return {
+      name: 'get_code_resolves',
+      description: 'Get detailed information for a code action item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the code action was obtained' },
+          item: { type: 'object', description: 'Code action item from get_code_actions tool' }
+        },
+        required: ['file_path', 'item']
       }
     };
   }
@@ -941,6 +969,7 @@ export class McpServer {
     return [
       this.getCallHierarchyTool(),
       this.getCodeActionsTool(),
+      this.getCodeResolvesTool(),
       this.getColorsTool(),
       this.getCompletionsTool(),
       this.getFoldingRangesTool(),
@@ -1058,6 +1087,19 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
+  }
+
+  /**
+   * Handles get code resolves tool requests
+   * 
+   * @private
+   * @param {GetCodeResolvesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetCodeResolves(args: GetCodeResolvesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['file_path', 'item']);
+    if (error) return error;
+    return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
   }
 
   /**
@@ -1810,6 +1852,7 @@ export class McpServer {
   private setupToolHandlers(): void {
     this.toolHandlers.set('get_call_hierarchy', this.handleGetCallHierarchy.bind(this));
     this.toolHandlers.set('get_code_actions', this.handleGetCodeActions.bind(this));
+    this.toolHandlers.set('get_code_resolves', this.handleGetCodeResolves.bind(this));
     this.toolHandlers.set('get_colors', this.handleGetColors.bind(this));
     this.toolHandlers.set('get_completions', this.handleGetCompletions.bind(this));
     this.toolHandlers.set('get_folding_ranges', this.handleGetFoldingRanges.bind(this));
@@ -1901,7 +1944,11 @@ export class McpServer {
       if (field === 'query') {
         type[field] = z.string();
       } else {
-        type[field] = z.union([z.number(), z.string().min(1)]);
+        type[field] = z.union([
+          z.number(),
+          z.record(z.string(), z.unknown()).refine((obj) => Object.keys(obj).length > 0),
+          z.string().min(1)
+        ]);
       }
     }
     const schema = z.object(type);
