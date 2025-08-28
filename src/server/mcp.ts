@@ -33,7 +33,9 @@ import {
   DocumentColorRequest,
   DocumentFormattingRequest,
   DocumentHighlightRequest,
+  DocumentLink,
   DocumentLinkRequest,
+  DocumentLinkResolveRequest,
   DocumentRangeFormattingRequest,
   DocumentSymbolRequest,
   FoldingRangeRequest,
@@ -74,27 +76,27 @@ interface FilePathArgs {
   file_path: string;
 }
 
-interface GetCallHierarchyArgs extends PositionArgs {}
+interface GetCallHierarchyArgs extends PositionArgs { }
 
-interface GetCodeActionsArgs extends PositionArgs {}
+interface GetCodeActionsArgs extends PositionArgs { }
 
 interface GetCodeResolvesArgs extends ResolveArgs {
   item: CodeAction;
 }
 
-interface GetColorsArgs extends FilePathArgs {}
+interface GetColorsArgs extends FilePathArgs { }
 
-interface GetCompletionsArgs extends PositionArgs {}
+interface GetCompletionsArgs extends PositionArgs { }
 
-interface GetFoldingRangesArgs extends FilePathArgs {}
+interface GetFoldingRangesArgs extends FilePathArgs { }
 
-interface GetFormatArgs extends FilePathArgs {}
+interface GetFormatArgs extends FilePathArgs { }
 
-interface GetHighlightsArgs extends PositionArgs {}
+interface GetHighlightsArgs extends PositionArgs { }
 
-interface GetHoverArgs extends PositionArgs {}
+interface GetHoverArgs extends PositionArgs { }
 
-interface GetImplementationsArgs extends PositionArgs {}
+interface GetImplementationsArgs extends PositionArgs { }
 
 interface GetIncomingCallsArgs {
   item: CallHierarchyItem;
@@ -104,11 +106,15 @@ interface GetInlayHintArgs extends ResolveArgs {
   item: InlayHint;
 }
 
-interface GetInlayHintsArgs extends RangeArgs {}
+interface GetInlayHintsArgs extends RangeArgs { }
 
-interface GetLinkedEditingRangeArgs extends PositionArgs {}
+interface GetLinkedEditingRangeArgs extends PositionArgs { }
 
-interface GetLinksArgs extends FilePathArgs {}
+interface GetLinkResolvesArgs extends ResolveArgs {
+  item: DocumentLink;
+}
+
+interface GetLinksArgs extends FilePathArgs { }
 
 interface GetOutgoingCallsArgs {
   item: CallHierarchyItem;
@@ -119,25 +125,25 @@ interface GetProjectSymbolsArgs extends ProjectArgs {
   timeout?: number;
 }
 
-interface GetRangeFormatArgs extends RangeArgs {}
+interface GetRangeFormatArgs extends RangeArgs { }
 
 interface GetResolvesArgs extends ResolveArgs {
   item: CompletionItem;
 }
 
-interface GetSelectionRangeArgs extends PositionArgs {}
+interface GetSelectionRangeArgs extends PositionArgs { }
 
-interface GetSemanticTokensArgs extends FilePathArgs {}
+interface GetSemanticTokensArgs extends FilePathArgs { }
 
-interface GetServerCapabilitiesArgs extends LanguageIdArgs {}
+interface GetServerCapabilitiesArgs extends LanguageIdArgs { }
 
-interface GetServerProjectsArgs extends LanguageIdArgs {}
+interface GetServerProjectsArgs extends LanguageIdArgs { }
 
 interface GetServerStatusArgs {
   language_id?: string;
 }
 
-interface GetSignatureArgs extends PositionArgs {}
+interface GetSignatureArgs extends PositionArgs { }
 
 interface GetSubtypesArgs {
   item: TypeHierarchyItem;
@@ -147,7 +153,7 @@ interface GetSupertypesArgs {
   item: TypeHierarchyItem;
 }
 
-interface GetSymbolDefinitionsArgs extends PositionArgs {}
+interface GetSymbolDefinitionsArgs extends PositionArgs { }
 
 interface GetSymbolReferencesArgs extends PositionArgs {
   include_declaration?: boolean;
@@ -157,11 +163,11 @@ interface GetSymbolRenamesArgs extends PositionArgs {
   new_name: string;
 }
 
-interface GetSymbolsArgs extends FilePathArgs {}
+interface GetSymbolsArgs extends FilePathArgs { }
 
-interface GetTypeDefinitionsArgs extends PositionArgs {}
+interface GetTypeDefinitionsArgs extends PositionArgs { }
 
-interface GetTypeHierarchyArgs extends PositionArgs {}
+interface GetTypeHierarchyArgs extends PositionArgs { }
 
 interface LanguageIdArgs {
   language_id: string;
@@ -209,7 +215,7 @@ interface StartServerArgs extends LanguageIdArgs {
   project?: string;
 }
 
-interface StopServerArgs extends LanguageIdArgs {}
+interface StopServerArgs extends LanguageIdArgs { }
 
 type ToolHandler = (args: any) => Promise<any>;
 
@@ -538,6 +544,27 @@ export class McpServer {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for resolving document links
+   * 
+   * @private
+   * @returns {Tool} Document link resolve tool
+   */
+  private getLinkResolvesTool(): Tool {
+    return {
+      name: 'get_link_resolves',
+      description: 'Get detailed information for a document link item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the document link was obtained' },
+          item: { type: 'object', description: 'Document link item from get_links tool' }
+        },
+        required: ['file_path', 'item']
       }
     };
   }
@@ -924,6 +951,7 @@ export class McpServer {
       this.getInlayHintTool(),
       this.getInlayHintsTool(),
       this.getLinkedEditingRangeTool(),
+      this.getLinkResolvesTool(),
       this.getLinksTool(),
       this.getOutgoingCallsTool(),
       this.getProjectSymbolsTool(),
@@ -1227,6 +1255,19 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
+  }
+
+  /**
+   * Handles get link resolves tool requests
+   * 
+   * @private
+   * @param {GetLinkResolvesArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
+  private async handleGetLinkResolves(args: GetLinkResolvesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['file_path', 'item']);
+    if (error) return error;
+    return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
   }
 
   /**
@@ -1844,6 +1885,7 @@ export class McpServer {
       { tool: 'get_inlay_hint', capability: 'inlayHintProvider', handler: this.handleGetInlayHint.bind(this) },
       { tool: 'get_inlay_hints', capability: 'inlayHintProvider', handler: this.handleGetInlayHints.bind(this) },
       { tool: 'get_linked_editing_range', capability: 'linkedEditingRangeProvider', handler: this.handleGetLinkedEditingRange.bind(this) },
+      { tool: 'get_link_resolves', capability: 'documentLinkProvider', handler: this.handleGetLinkResolves.bind(this) },
       { tool: 'get_links', capability: 'documentLinkProvider', handler: this.handleGetLinks.bind(this) },
       { tool: 'get_outgoing_calls', capability: 'callHierarchyProvider', handler: this.handleGetOutgoingCalls.bind(this) },
       { tool: 'get_project_symbols', capability: 'workspaceSymbolProvider', handler: this.handleGetProjectSymbols.bind(this) },
