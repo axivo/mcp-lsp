@@ -70,137 +70,74 @@ import { z } from 'zod';
 import { Client } from './client.js';
 import { Config } from './config.js';
 
-interface GetCallHierarchyArgs {
-  character: number;
+interface FilePathArgs {
   file_path: string;
-  line: number;
 }
 
-interface GetCodeActionsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetCallHierarchyArgs extends PositionArgs {}
 
-interface GetCodeResolvesArgs {
-  file_path: string;
+interface GetCodeActionsArgs extends PositionArgs {}
+
+interface GetCodeResolvesArgs extends ResolveArgs {
   item: CodeAction;
 }
 
-interface GetColorsArgs {
-  file_path: string;
-}
+interface GetColorsArgs extends FilePathArgs {}
 
-interface GetCompletionsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetCompletionsArgs extends PositionArgs {}
 
-interface GetFormatArgs {
-  file_path: string;
-}
+interface GetFoldingRangesArgs extends FilePathArgs {}
 
-interface GetFoldingRangesArgs {
-  file_path: string;
-}
+interface GetFormatArgs extends FilePathArgs {}
 
-interface GetHighlightsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetHighlightsArgs extends PositionArgs {}
 
-interface GetHoverArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetHoverArgs extends PositionArgs {}
 
-interface GetImplementationsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetImplementationsArgs extends PositionArgs {}
 
 interface GetIncomingCallsArgs {
   item: CallHierarchyItem;
 }
 
-interface GetInlayHintArgs {
-  file_path: string;
+interface GetInlayHintArgs extends ResolveArgs {
   item: InlayHint;
 }
 
-interface GetInlayHintsArgs {
-  end_character: number;
-  end_line: number;
-  file_path: string;
-  start_character: number;
-  start_line: number;
-}
+interface GetInlayHintsArgs extends RangeArgs {}
 
-interface GetLinkedEditingRangeArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetLinkedEditingRangeArgs extends PositionArgs {}
 
-interface GetLinksArgs {
-  file_path: string;
-}
+interface GetLinksArgs extends FilePathArgs {}
 
 interface GetOutgoingCallsArgs {
   item: CallHierarchyItem;
 }
 
-interface GetProjectSymbolsArgs {
-  language_id: string;
-  project: string;
+interface GetProjectSymbolsArgs extends ProjectArgs {
   query: string;
   timeout?: number;
 }
 
-interface GetRangeFormatArgs {
-  end_character: number;
-  end_line: number;
-  file_path: string;
-  start_character: number;
-  start_line: number;
-}
+interface GetRangeFormatArgs extends RangeArgs {}
 
-interface GetResolvesArgs {
-  file_path: string;
+interface GetResolvesArgs extends ResolveArgs {
   item: CompletionItem;
 }
 
-interface GetSelectionRangeArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetSelectionRangeArgs extends PositionArgs {}
 
-interface GetSemanticTokensArgs {
-  file_path: string;
-}
+interface GetSemanticTokensArgs extends FilePathArgs {}
 
-interface GetServerCapabilitiesArgs {
-  language_id: string;
-}
+interface GetServerCapabilitiesArgs extends LanguageIdArgs {}
 
-interface GetServerProjectsArgs {
-  language_id: string;
-}
+interface GetServerProjectsArgs extends LanguageIdArgs {}
 
 interface GetServerStatusArgs {
   language_id?: string;
 }
 
-interface GetSignatureArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetSignatureArgs extends PositionArgs {}
 
 interface GetSubtypesArgs {
   item: TypeHierarchyItem;
@@ -210,50 +147,55 @@ interface GetSupertypesArgs {
   item: TypeHierarchyItem;
 }
 
-interface GetSymbolDefinitionsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetSymbolDefinitionsArgs extends PositionArgs {}
 
-interface GetSymbolReferencesArgs {
-  character: number;
-  file_path: string;
-  line: number;
+interface GetSymbolReferencesArgs extends PositionArgs {
   include_declaration?: boolean;
 }
 
-interface GetSymbolRenamesArgs {
-  character: number;
-  file_path: string;
-  line: number;
+interface GetSymbolRenamesArgs extends PositionArgs {
   new_name: string;
 }
 
-interface GetSymbolsArgs {
-  file_path: string;
-}
+interface GetSymbolsArgs extends FilePathArgs {}
 
-interface GetTypeDefinitionsArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetTypeDefinitionsArgs extends PositionArgs {}
 
-interface GetTypeHierarchyArgs {
-  character: number;
-  file_path: string;
-  line: number;
-}
+interface GetTypeHierarchyArgs extends PositionArgs {}
 
-interface LoadProjectFilesArgs {
+interface LanguageIdArgs {
   language_id: string;
-  project: string;
+}
+
+interface LoadProjectFilesArgs extends ProjectArgs {
   timeout?: number;
 }
 
-interface RestartServerArgs {
+interface PositionArgs {
+  character: number;
+  file_path: string;
+  line: number;
+}
+
+interface ProjectArgs {
   language_id: string;
+  project: string;
+}
+
+interface RangeArgs {
+  end_character: number;
+  end_line: number;
+  file_path: string;
+  start_character: number;
+  start_line: number;
+}
+
+interface ResolveArgs {
+  file_path: string;
+  item: any;
+}
+
+interface RestartServerArgs extends LanguageIdArgs {
   project?: string;
 }
 
@@ -263,14 +205,11 @@ interface ServerTools {
   tool: string;
 }
 
-interface StartServerArgs {
-  language_id: string;
+interface StartServerArgs extends LanguageIdArgs {
   project?: string;
 }
 
-interface StopServerArgs {
-  language_id: string;
-}
+interface StopServerArgs extends LanguageIdArgs {}
 
 type ToolHandler = (args: any) => Promise<any>;
 
