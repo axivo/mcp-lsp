@@ -55,6 +55,7 @@ import {
   SelectionRangeRequest,
   SemanticTokensParams,
   SemanticTokensRequest,
+  ServerCapabilities,
   SignatureHelpRequest,
   TextDocumentPositionParams,
   TypeDefinitionRequest,
@@ -208,7 +209,7 @@ interface RestartServerArgs extends LanguageIdArgs {
 interface ServerTools {
   capability: string;
   handler: ToolHandler;
-  tool: string;
+  tool: Tool;
 }
 
 interface StartServerArgs extends LanguageIdArgs {
@@ -1397,39 +1398,32 @@ export class McpServer {
    * Generates capability to tool mapping based on server capabilities
    * 
    * @private
-   * @param {any} capabilities - Server capabilities object
-   * @returns {Record<string, string | string[] | null>} Mapping of capabilities to tool names
+   * @param {ServerCapabilities} capabilities - Server capabilities object
+   * @returns {Record<string, Tool | Tool[] | null>} Mapping of capabilities to tool definitions
    */
-  private generateCapabilityToolMap(capabilities: any): Record<string, string | string[] | null> {
-    const operations: string[] = [];
-    const toolMap: Record<string, string | string[] | null> = {};
+  private generateCapabilityToolMap(capabilities: ServerCapabilities): Record<string, Tool | Tool[] | null> {
+    const server = new Map<string, Tool[]>();
+    const toolMap: Record<string, Tool | Tool[] | null> = {};
     const tools = this.setServerTools();
     for (const { tool, capability } of tools) {
-      if (capability === 'serverOperations') {
-        operations.push(tool);
-      } else {
-        const isSupported = capabilities[capability];
-        if (!toolMap[capability]) {
-          toolMap[capability] = isSupported ? tool : null;
-        } else if (isSupported) {
-          const existing = toolMap[capability];
-          if (Array.isArray(existing)) {
-            existing.push(tool);
-          } else if (existing === null) {
-            toolMap[capability] = tool;
-          } else {
-            toolMap[capability] = [existing, tool];
-          }
+      if (!server.has(capability)) {
+        server.set(capability, []);
+      }
+      server.get(capability)!.push(tool);
+    }
+    for (const [capability, value] of Object.entries(capabilities)) {
+      if (value) {
+        if (server.has(capability)) {
+          const tool = server.get(capability)!;
+          toolMap[capability] = tool.length === 1 ? tool[0] : tool;
         } else {
-          const existing = toolMap[capability];
-          if (existing === null) {
-            toolMap[capability] = null;
-          }
+          toolMap[capability] = null;
         }
       }
     }
-    if (operations.length) {
-      toolMap['serverOperations'] = operations;
+    const serverOperations = server.get('serverOperations');
+    if (serverOperations && serverOperations.length) {
+      toolMap['serverOperations'] = serverOperations;
     }
     return toolMap;
   }
@@ -1871,44 +1865,44 @@ export class McpServer {
    */
   private setServerTools(): ServerTools[] {
     return [
-      { tool: 'get_call_hierarchy', capability: 'callHierarchyProvider', handler: this.handleGetCallHierarchy.bind(this) },
-      { tool: 'get_code_actions', capability: 'codeActionProvider', handler: this.handleGetCodeActions.bind(this) },
-      { tool: 'get_code_resolves', capability: 'codeActionProvider', handler: this.handleGetCodeResolves.bind(this) },
-      { tool: 'get_colors', capability: 'colorProvider', handler: this.handleGetColors.bind(this) },
-      { tool: 'get_completions', capability: 'completionProvider', handler: this.handleGetCompletions.bind(this) },
-      { tool: 'get_folding_ranges', capability: 'foldingRangeProvider', handler: this.handleGetFoldingRanges.bind(this) },
-      { tool: 'get_format', capability: 'documentFormattingProvider', handler: this.handleGetFormat.bind(this) },
-      { tool: 'get_highlights', capability: 'documentHighlightProvider', handler: this.handleGetHighlights.bind(this) },
-      { tool: 'get_hover', capability: 'hoverProvider', handler: this.handleGetHover.bind(this) },
-      { tool: 'get_implementations', capability: 'implementationProvider', handler: this.handleGetImplementations.bind(this) },
-      { tool: 'get_incoming_calls', capability: 'callHierarchyProvider', handler: this.handleGetIncomingCalls.bind(this) },
-      { tool: 'get_inlay_hint', capability: 'inlayHintProvider', handler: this.handleGetInlayHint.bind(this) },
-      { tool: 'get_inlay_hints', capability: 'inlayHintProvider', handler: this.handleGetInlayHints.bind(this) },
-      { tool: 'get_linked_editing_range', capability: 'linkedEditingRangeProvider', handler: this.handleGetLinkedEditingRange.bind(this) },
-      { tool: 'get_link_resolves', capability: 'documentLinkProvider', handler: this.handleGetLinkResolves.bind(this) },
-      { tool: 'get_links', capability: 'documentLinkProvider', handler: this.handleGetLinks.bind(this) },
-      { tool: 'get_outgoing_calls', capability: 'callHierarchyProvider', handler: this.handleGetOutgoingCalls.bind(this) },
-      { tool: 'get_project_symbols', capability: 'workspaceSymbolProvider', handler: this.handleGetProjectSymbols.bind(this) },
-      { tool: 'get_range_format', capability: 'documentRangeFormattingProvider', handler: this.handleGetRangeFormat.bind(this) },
-      { tool: 'get_resolves', capability: 'completionProvider', handler: this.handleGetResolves.bind(this) },
-      { tool: 'get_selection_range', capability: 'selectionRangeProvider', handler: this.handleGetSelectionRange.bind(this) },
-      { tool: 'get_semantic_tokens', capability: 'semanticTokensProvider', handler: this.handleGetSemanticTokens.bind(this) },
-      { tool: 'get_server_capabilities', capability: 'serverOperations', handler: this.handleGetServerCapabilities.bind(this) },
-      { tool: 'get_server_projects', capability: 'serverOperations', handler: this.handleGetServerProjects.bind(this) },
-      { tool: 'get_server_status', capability: 'serverOperations', handler: this.handleGetServerStatus.bind(this) },
-      { tool: 'get_signature', capability: 'signatureHelpProvider', handler: this.handleGetSignature.bind(this) },
-      { tool: 'get_subtypes', capability: 'typeHierarchyProvider', handler: this.handleGetSubtypes.bind(this) },
-      { tool: 'get_supertypes', capability: 'typeHierarchyProvider', handler: this.handleGetSupertypes.bind(this) },
-      { tool: 'get_symbol_definitions', capability: 'definitionProvider', handler: this.handleGetSymbolDefinitions.bind(this) },
-      { tool: 'get_symbol_references', capability: 'referencesProvider', handler: this.handleGetSymbolReferences.bind(this) },
-      { tool: 'get_symbol_renames', capability: 'renameProvider', handler: this.handleGetSymbolRenames.bind(this) },
-      { tool: 'get_symbols', capability: 'documentSymbolProvider', handler: this.handleGetSymbols.bind(this) },
-      { tool: 'get_type_definitions', capability: 'typeDefinitionProvider', handler: this.handleGetTypeDefinitions.bind(this) },
-      { tool: 'get_type_hierarchy', capability: 'typeHierarchyProvider', handler: this.handleGetTypeHierarchy.bind(this) },
-      { tool: 'load_project_files', capability: 'serverOperations', handler: this.handleLoadProjectFiles.bind(this) },
-      { tool: 'restart_server', capability: 'serverOperations', handler: this.handleRestartServer.bind(this) },
-      { tool: 'start_server', capability: 'serverOperations', handler: this.handleStartServer.bind(this) },
-      { tool: 'stop_server', capability: 'serverOperations', handler: this.handleStopServer.bind(this) }
+      { tool: this.getCallHierarchyTool(), capability: 'callHierarchyProvider', handler: this.handleGetCallHierarchy.bind(this) },
+      { tool: this.getCodeActionsTool(), capability: 'codeActionProvider', handler: this.handleGetCodeActions.bind(this) },
+      { tool: this.getCodeResolvesTool(), capability: 'codeActionProvider', handler: this.handleGetCodeResolves.bind(this) },
+      { tool: this.getColorsTool(), capability: 'colorProvider', handler: this.handleGetColors.bind(this) },
+      { tool: this.getCompletionsTool(), capability: 'completionProvider', handler: this.handleGetCompletions.bind(this) },
+      { tool: this.getFoldingRangesTool(), capability: 'foldingRangeProvider', handler: this.handleGetFoldingRanges.bind(this) },
+      { tool: this.getFormatTool(), capability: 'documentFormattingProvider', handler: this.handleGetFormat.bind(this) },
+      { tool: this.getHighlightsTool(), capability: 'documentHighlightProvider', handler: this.handleGetHighlights.bind(this) },
+      { tool: this.getHoverTool(), capability: 'hoverProvider', handler: this.handleGetHover.bind(this) },
+      { tool: this.getImplementationsTool(), capability: 'implementationProvider', handler: this.handleGetImplementations.bind(this) },
+      { tool: this.getIncomingCallsTool(), capability: 'callHierarchyProvider', handler: this.handleGetIncomingCalls.bind(this) },
+      { tool: this.getInlayHintTool(), capability: 'inlayHintProvider', handler: this.handleGetInlayHint.bind(this) },
+      { tool: this.getInlayHintsTool(), capability: 'inlayHintProvider', handler: this.handleGetInlayHints.bind(this) },
+      { tool: this.getLinkedEditingRangeTool(), capability: 'linkedEditingRangeProvider', handler: this.handleGetLinkedEditingRange.bind(this) },
+      { tool: this.getLinkResolvesTool(), capability: 'documentLinkProvider', handler: this.handleGetLinkResolves.bind(this) },
+      { tool: this.getLinksTool(), capability: 'documentLinkProvider', handler: this.handleGetLinks.bind(this) },
+      { tool: this.getOutgoingCallsTool(), capability: 'callHierarchyProvider', handler: this.handleGetOutgoingCalls.bind(this) },
+      { tool: this.getProjectSymbolsTool(), capability: 'workspaceSymbolProvider', handler: this.handleGetProjectSymbols.bind(this) },
+      { tool: this.getRangeFormatTool(), capability: 'documentRangeFormattingProvider', handler: this.handleGetRangeFormat.bind(this) },
+      { tool: this.getResolvesTool(), capability: 'completionProvider', handler: this.handleGetResolves.bind(this) },
+      { tool: this.getSelectionRangeTool(), capability: 'selectionRangeProvider', handler: this.handleGetSelectionRange.bind(this) },
+      { tool: this.getSemanticTokensTool(), capability: 'semanticTokensProvider', handler: this.handleGetSemanticTokens.bind(this) },
+      { tool: this.getServerCapabilitiesTool(), capability: 'serverOperations', handler: this.handleGetServerCapabilities.bind(this) },
+      { tool: this.getServerProjectsTool(), capability: 'serverOperations', handler: this.handleGetServerProjects.bind(this) },
+      { tool: this.getServerStatusTool(), capability: 'serverOperations', handler: this.handleGetServerStatus.bind(this) },
+      { tool: this.getSignatureTool(), capability: 'signatureHelpProvider', handler: this.handleGetSignature.bind(this) },
+      { tool: this.getSubtypesTool(), capability: 'typeHierarchyProvider', handler: this.handleGetSubtypes.bind(this) },
+      { tool: this.getSupertypesTool(), capability: 'typeHierarchyProvider', handler: this.handleGetSupertypes.bind(this) },
+      { tool: this.getSymbolDefinitionsTool(), capability: 'definitionProvider', handler: this.handleGetSymbolDefinitions.bind(this) },
+      { tool: this.getSymbolReferencesTool(), capability: 'referencesProvider', handler: this.handleGetSymbolReferences.bind(this) },
+      { tool: this.getSymbolRenamesTool(), capability: 'renameProvider', handler: this.handleGetSymbolRenames.bind(this) },
+      { tool: this.getSymbolsTool(), capability: 'documentSymbolProvider', handler: this.handleGetSymbols.bind(this) },
+      { tool: this.getTypeDefinitionsTool(), capability: 'typeDefinitionProvider', handler: this.handleGetTypeDefinitions.bind(this) },
+      { tool: this.getTypeHierarchyTool(), capability: 'typeHierarchyProvider', handler: this.handleGetTypeHierarchy.bind(this) },
+      { tool: this.loadProjectFilesTool(), capability: 'serverOperations', handler: this.handleLoadProjectFiles.bind(this) },
+      { tool: this.restartServerTool(), capability: 'serverOperations', handler: this.handleRestartServer.bind(this) },
+      { tool: this.startServerTool(), capability: 'serverOperations', handler: this.handleStartServer.bind(this) },
+      { tool: this.stopServerTool(), capability: 'serverOperations', handler: this.handleStopServer.bind(this) }
     ];
   }
 
@@ -1930,7 +1924,7 @@ export class McpServer {
   private setupToolHandlers(): void {
     const tools = this.setServerTools();
     for (const { tool, handler } of tools) {
-      this.toolHandlers.set(tool, handler);
+      this.toolHandlers.set(tool.name, handler);
     }
   }
 
