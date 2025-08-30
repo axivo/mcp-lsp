@@ -203,7 +203,7 @@ interface ResolveArgs {
 }
 
 interface RestartServerArgs extends LanguageIdArgs {
-  project?: string;
+  project: string;
 }
 
 interface ServerTools {
@@ -1735,7 +1735,7 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleRestartServer(args: RestartServerArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id']);
+    const error = this.validateArgs(args, ['language_id', 'project']);
     if (error) return error;
     await this.client.restartServer(args.language_id, args.project);
     return `Successfully restarted '${args.language_id}' language server with '${args.project}' project.`;
@@ -1833,9 +1833,9 @@ export class McpServer {
         type: 'object',
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
-          project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
+          project: { type: 'string', description: 'Project name to load' }
         },
-        required: ['language_id']
+        required: ['language_id', 'project']
       }
     };
   }
