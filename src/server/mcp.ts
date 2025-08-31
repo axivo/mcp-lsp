@@ -1318,7 +1318,6 @@ export class McpServer {
     if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.project) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
     const params: WorkspaceSymbolParams = { query: args.query };
     return await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
   }
@@ -1737,8 +1736,7 @@ export class McpServer {
   private async handleRestartServer(args: RestartServerArgs): Promise<any> {
     const error = this.validateArgs(args, ['language_id', 'project']);
     if (error) return error;
-    await this.client.restartServer(args.language_id, args.project);
-    return `Successfully restarted '${args.language_id}' language server with '${args.project}' project.`;
+    return await this.client.restartServer(args.language_id, args.project);
   }
 
   /**
@@ -1751,20 +1749,7 @@ export class McpServer {
   private async handleStartServer(args: StartServerArgs): Promise<any> {
     const error = this.validateArgs(args, ['language_id']);
     if (error) return error;
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    if (!serverConfig.command) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    const project = args.project ?? serverConfig.projects[0]?.name;
-    if (!project) {
-      return `No projects configured for '${args.language_id}' language server.`;
-    }
-    const currentProject = this.client.getProjectId(args.language_id);
-    if (currentProject) {
-      return `Language server '${args.language_id}' is already running '${currentProject}' project.`;
-    }
-    await this.client.startServer(args.language_id, project);
-    return `Successfully started '${args.language_id}' language server with '${project}' project.`;
+    return await this.client.startServer(args.language_id, args.project);
   }
 
   /**

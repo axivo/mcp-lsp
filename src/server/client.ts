@@ -149,7 +149,9 @@ export class Client {
       new StreamMessageReader(process.stdout!),
       new StreamMessageWriter(process.stdin!)
     );
-    connection.onError(() => { });
+    connection.onError((error) => {
+      return this.response(`Language server '${languageId}' error: ${error}`);
+    });
     const serverConfig = this.config.getServerConfig(languageId);
     if (serverConfig.settings.configurationRequest === true) {
       connection.onRequest(ConfigurationRequest.method, (params: ConfigurationParams) => {
@@ -193,7 +195,7 @@ export class Client {
     if (patterns?.include && patterns.include.length) {
       for (const pattern of patterns.include) {
         includePatterns.push(pattern);
-        const index = excludes.findIndex(exclude => pattern === `**/${exclude}`);
+        const index = excludes.findIndex(exclude => pattern.split('/').includes(exclude));
         if (index !== -1) {
           excludes.splice(index, 1);
         }
@@ -327,9 +329,9 @@ export class Client {
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {string} filePath - File path to open
-   * @returns {Promise<void>} Promise that resolves when file is opened
+   * @returns {Promise<ServerResponse | null>} Promise that resolves with error response or null on success
    */
-  private async openFile(languageId: string, project: string, filePath: string): Promise<void> {
+  private async openFile(languageId: string, project: string, filePath: string): Promise<ServerResponse | null> {
     const uri = pathToFileURL(filePath).toString();
     let openedSet = this.openedFiles.get(project);
     if (!openedSet) {
@@ -337,7 +339,7 @@ export class Client {
       this.openedFiles.set(project, openedSet);
     }
     if (openedSet.has(uri)) {
-      return;
+      return null;
     }
     try {
       const text = await this.readFileAsync(filePath, 'utf8');
@@ -352,9 +354,9 @@ export class Client {
       });
       openedSet.add(uri);
       this.openedFiles.set(project, openedSet);
+      return null;
     } catch (error) {
-      console.error(`Failed to read '${filePath}' file: ${error}`);
-      return;
+      return this.response(`Failed to read '${filePath}' file: ${error}`);
     }
   }
 
@@ -477,7 +479,7 @@ export class Client {
    * @param {string[]} extensions - File extensions
    * @returns {Promise<void>} Promise that resolves when files are cached
    */
-  private async setFilesCache(project: string, projectConfig: any, extensions: string[]): Promise<void> {
+  private async setFilesCache(project: string, projectConfig: ProjectConfig, extensions: string[]): Promise<void> {
     let cachedFiles = this.projectFiles.get(project);
     if (!cachedFiles) {
       cachedFiles = new Map<string, string[]>();
@@ -675,12 +677,12 @@ export class Client {
   /**
    * Creates a standardized response for tool execution
    * 
-   * @param {any} response - The response data from language server
+   * @param {unknown} response - The response data from language server
    * @param {boolean} stringify - Whether to JSON stringify the response (default: false)
    * @returns {ServerResponse} Standardized response format
    */
-  response(response: any, stringify: boolean = false): ServerResponse {
-    const text = stringify ? JSON.stringify(response) : response;
+  response(response: unknown, stringify: boolean = false): ServerResponse {
+    const text = typeof response === 'string' && !stringify ? response : JSON.stringify(response);
     return { content: [{ type: 'text', text }] };
   }
 
@@ -709,9 +711,9 @@ export class Client {
    * 
    * @param {string} project - Project name
    * @param {string} method - Method name from typed notification
-   * @param {any} params - Method parameters
+   * @param {unknown} params - Method parameters
    */
-  sendNotification(project: string, method: string, params: any): void {
+  sendNotification(project: string, method: string, params: unknown): void {
     const serverConnection = this.connections.get(project);
     if (!serverConnection || !serverConnection.process.stdin) {
       return;
@@ -725,10 +727,10 @@ export class Client {
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {string} method - Method name from typed request
-   * @param {any} params - Method parameters
-   * @returns {Promise<any>} Promise that resolves with the response
+   * @param {unknown} params - Method parameters
+   * @returns {Promise<unknown>} Promise that resolves with the response
    */
-  async sendRequest(languageId: string, project: string, method: string, params: any): Promise<any> {
+  async sendRequest(languageId: string, project: string, method: string, params: unknown): Promise<unknown> {
     if (!this.checkRateLimit(languageId)) {
       return this.response(`Rate limit exceeded for '${languageId}' language server.`);
     }
@@ -742,7 +744,7 @@ export class Client {
     try {
       return await serverConnection.connection.sendRequest(method, params);
     } catch (error) {
-      return this.response(`Request failed for '${method}': ${error}`);
+      return this.response(`Request failed for '${method}' method: ${error}`);
     }
   }
 
@@ -751,10 +753,10 @@ export class Client {
    * 
    * @param {string} file - Path to the file
    * @param {string} method - Method name from typed request
-   * @param {any} params - Method parameters
-   * @returns {Promise<any>} Promise that resolves with the response
+   * @param {unknown} params - Method parameters
+   * @returns {Promise<unknown>} Promise that resolves with the response
    */
-  async sendServerRequest(file: string, method: string, params: any): Promise<any> {
+  async sendServerRequest(file: string, method: string, params: unknown): Promise<unknown> {
     const project = this.getServerInfo(file);
     if (!project) {
       if (this.connections.size === 0) {
@@ -826,7 +828,7 @@ export class Client {
    * Starts a language server for a specific language
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} project - Optional project name to start (defaults to first project)
+   * @param {string} project - Optional project name to start, defaults to first project
    * @returns {Promise<ServerResponse>} Promise that resolves when server is started
    */
   async startServer(languageId: string, project?: string): Promise<ServerResponse> {
@@ -935,7 +937,7 @@ export class Client {
       const packageJson = JSON.parse(this.readFileSync(packagePath, 'utf8'));
       return packageJson.version;
     } catch (error) {
-      return `Failed to read package.json version: ${error}`;
+      return `Failed to read package.json version. ${error}`;
     }
   }
 }
