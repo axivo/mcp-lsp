@@ -122,7 +122,9 @@ interface GetOutgoingCallsArgs {
 }
 
 interface GetProjectSymbolsArgs extends ProjectArgs {
-  query: string;
+  limit?: number;
+  offset?: number;
+  query?: string;
   timeout?: number;
 }
 
@@ -164,7 +166,10 @@ interface GetSymbolRenamesArgs extends PositionArgs {
   new_name: string;
 }
 
-interface GetSymbolsArgs extends FilePathArgs { }
+interface GetSymbolsArgs extends FilePathArgs {
+  limit?: number;
+  offset?: number;
+}
 
 interface GetTypeDefinitionsArgs extends PositionArgs { }
 
@@ -176,6 +181,12 @@ interface LanguageIdArgs {
 
 interface LoadProjectFilesArgs extends ProjectArgs {
   timeout?: number;
+}
+
+interface PageMetadata {
+  more: boolean;
+  offset: number;
+  total: number;
 }
 
 interface PositionArgs {
@@ -230,6 +241,7 @@ export class McpServer {
   private config: Config;
   private server: Server;
   private toolHandlers: Map<string, ToolHandler>;
+  private toolPaginationLimit: number;
   private transport?: StdioServerTransport;
 
   /**
@@ -245,6 +257,7 @@ export class McpServer {
       { capabilities: { tools: {} } }
     );
     this.toolHandlers = new Map<string, ToolHandler>();
+    this.toolPaginationLimit = 250;
     this.setupToolHandlers();
     this.setupHandlers();
   }
@@ -625,10 +638,12 @@ export class McpServer {
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
-          query: { type: 'string', description: 'Symbol search query' },
+          limit: { type: 'number', description: `Pagination limit for number of symbols to return (default: ${this.toolPaginationLimit})`, default: this.toolPaginationLimit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip (default: 0)', default: 0 },
+          query: { type: 'string', description: 'Symbol search query (default: empty)', default: '' },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
-        required: ['language_id', 'project', 'query']
+        required: ['language_id', 'project']
       }
     };
   }
@@ -923,7 +938,9 @@ export class McpServer {
       inputSchema: {
         type: 'object',
         properties: {
-          file_path: { type: 'string', description: 'Path to the project file' }
+          file_path: { type: 'string', description: 'Path to the project file' },
+          limit: { type: 'number', description: `Pagination limit for number of symbols to return (default: ${this.toolPaginationLimit})`, default: this.toolPaginationLimit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip (default: 0)', default: 0 }
         },
         required: ['file_path']
       }
@@ -1312,14 +1329,31 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project', 'query']);
+    const error = this.validateArgs(args, ['language_id', 'project']);
     if (error) return error;
     const projectId = this.client.getProjectId(args.language_id);
     if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.project) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    const params: WorkspaceSymbolParams = { query: args.query };
-    return await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
+    const params: WorkspaceSymbolParams = { query: args.query ?? '' };
+    const fullResult = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
+    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
+      return this.client.response(fullResult);
+    }
+    const limit = args.limit ?? this.toolPaginationLimit;
+    const offset = args.offset ?? 0;
+    const total = fullResult.length;
+    const paginatedItems = fullResult.slice(offset, offset + limit);
+    const more = offset + limit < total;
+    const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
+    const data = {
+      symbols: paginatedItems,
+      language_id: args.language_id,
+      project: args.project,
+      query: args.query
+    };
+    const pagination: PageMetadata = { more, offset, total };
+    return this.client.response(description, false, { data, pagination });
   }
 
   /**
@@ -1651,7 +1685,22 @@ export class McpServer {
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
-    return await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    const fullResult = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
+      return this.client.response(fullResult);
+    }
+    const limit = args.limit ?? this.toolPaginationLimit;
+    const offset = args.offset ?? 0;
+    const total = fullResult.length;
+    const paginatedItems = fullResult.slice(offset, offset + limit);
+    const more = offset + limit < total;
+    const description = `Showing ${paginatedItems.length} of ${total} document symbols.`;
+    const data = {
+      symbols: paginatedItems,
+      file_path: args.file_path
+    };
+    const pagination: PageMetadata = { more, offset, total };
+    return this.client.response(description, false, { data, pagination });
   }
 
   /**

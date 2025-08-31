@@ -77,7 +77,10 @@ interface ServerConnection {
   process: ChildProcess;
 }
 
-type ServerResponse = { content: [{ type: 'text', text: string }] };
+type ServerResponse = {
+  content: Array<{ type: 'text'; text: string }>;
+  data?: unknown;
+};
 
 /**
  * LSP Process Manager and Communication Client
@@ -677,13 +680,18 @@ export class Client {
   /**
    * Creates a standardized response for tool execution
    * 
-   * @param {unknown} response - The response data from language server
+   * @param {unknown} message - The response message from language server
    * @param {boolean} stringify - Whether to JSON stringify the response (default: false)
+   * @param {unknown} data - The structured content data from language server
    * @returns {ServerResponse} Standardized response format
    */
-  response(response: unknown, stringify: boolean = false): ServerResponse {
-    const text = typeof response === 'string' && !stringify ? response : JSON.stringify(response);
-    return { content: [{ type: 'text', text }] };
+  response(message: unknown, stringify: boolean = false, data?: unknown): ServerResponse {
+    const text = typeof message === 'string' && !stringify ? message : JSON.stringify(message);
+    const result: ServerResponse = { content: [{ type: 'text', text }] };
+    if (data) {
+      result.data = data;
+    }
+    return result;
   }
 
   /**
