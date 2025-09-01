@@ -82,6 +82,14 @@ type ServerResponse = {
   data?: unknown;
 };
 
+interface ServerStatus {
+  status: 'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured';
+  uptime: string;
+  error?: string;
+  languageId?: string;
+  project?: string;
+}
+
 /**
  * LSP Process Manager and Communication Client
  * 
@@ -370,9 +378,10 @@ export class Client {
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {string[]} files - File paths to open
+   * @param {number} [timeout] - Optional timeout in milliseconds 
    * @returns {Promise<void>} Promise that resolves when all files are opened
    */
-  private async openFiles(languageId: string, project: string, files: string[]): Promise<void> {
+  private async openFiles(languageId: string, project: string, files: string[], timeout?: number): Promise<void> {
     if (files.length === 0) {
       return;
     }
@@ -381,7 +390,28 @@ export class Client {
     const openFiles = files.map(file =>
       fileReadLimit(() => this.openFile(languageId, project, file))
     );
-    await Promise.allSettled(openFiles);
+    if (timeout) {
+      try {
+        const abortController = new AbortController();
+        const timeoutId = setTimeout(() => abortController.abort(), timeout);
+        await Promise.race([
+          Promise.allSettled(openFiles),
+          new Promise<void>((_, reject) => {
+            abortController.signal.addEventListener('abort', () => reject(new Error('Timeout')));
+          })
+        ]);
+        clearTimeout(timeoutId);
+      } catch (error) {
+        const fallbackFiles = files.slice(0, Math.min(10, files.length));
+        const fallbackPromises = fallbackFiles.map(file =>
+          fileReadLimit(() => this.openFile(languageId, project, file))
+        );
+        await Promise.allSettled(fallbackPromises);
+        throw error;
+      }
+    } else {
+      await Promise.allSettled(openFiles);
+    }
   }
 
   /**
@@ -575,6 +605,59 @@ export class Client {
   }
 
   /**
+   * Gets the status of language servers
+   * 
+   * @param {string} [languageId] - Optional language identifier to get status for a specific server
+   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Promise that resolves with server status information
+   */
+  async getServerStatus(languageId?: string): Promise<ServerStatus | Record<string, ServerStatus>> {
+    if (!languageId) {
+      const statusPromises = this.getServers().map(async (languageId) => {
+        try {
+          const connection = this.isServerRunning(languageId);
+          const uptime = this.getServerUptime(languageId);
+          if (!connection) {
+            return [languageId, { status: 'stopped', uptime: `0ms` }];
+          }
+          const serverConnection = this.getServerConnection(languageId);
+          if (!serverConnection || !serverConnection.initialized) {
+            const project = serverConnection?.name;
+            return [languageId, { status: 'starting', uptime: `${uptime}ms`, languageId, project }];
+          }
+          const project = serverConnection.name;
+          return [languageId, { status: 'ready', uptime: `${uptime}ms`, languageId, project }];
+        } catch (error) {
+          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
+        }
+      });
+      const results = await Promise.allSettled(statusPromises);
+      const statusEntries = results.map(result => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
+        }
+      });
+      return Object.fromEntries(statusEntries);
+    }
+    if (!this.config.hasServerConfig(languageId)) {
+      return { status: 'unconfigured', uptime: `0ms` };
+    }
+    const connection = this.isServerRunning(languageId);
+    if (!connection) {
+      return { status: 'stopped', uptime: `0ms` };
+    }
+    const serverConnection = this.getServerConnection(languageId);
+    const uptime = this.getServerUptime(languageId);
+    if (!serverConnection || !serverConnection.initialized) {
+      const project = serverConnection?.name;
+      return { status: 'starting', uptime: `${uptime}ms`, languageId, project };
+    }
+    const project = serverConnection.name;
+    return { status: 'ready', uptime: `${uptime}ms`, languageId, project };
+  }
+
+  /**
    * Gets the uptime of a specific language server in milliseconds
    * 
    * @param {string} languageId - Language identifier
@@ -656,21 +739,23 @@ export class Client {
     });
     if (unopenedFiles.length) {
       if (timeout) {
-        const word = unopenedFiles.length === 1 ? 'file' : 'files';
-        const message = `Timeout loading ${unopenedFiles.length} ${word} after ${timeout}ms for '${project}' project in '${languageId}' language server`;
-        const timeoutPromise = new Promise<void>((_, reject) => setTimeout(() => reject(`${message}.`), timeout));
         try {
-          await Promise.race([this.openFiles(languageId, project, unopenedFiles), timeoutPromise]);
+          await this.openFiles(languageId, project, unopenedFiles, timeout);
         } catch (error) {
-          this.openFiles(languageId, project, unopenedFiles.slice(0, 10));
-          return this.response(`${message}: ${error}`);
+          const message = `Timeout loading project files for '${project}' project in '${languageId}' language server.`;
+          return this.response(message, false, {
+            languageId,
+            project,
+            projectFiles: unopenedFiles.length,
+            projectTimeoutTime: `${timeout}ms`,
+            projectPath: projectConfig.path
+          });
         }
       } else {
         await this.openFiles(languageId, project, unopenedFiles);
       }
       const elapsed = Date.now() - timer;
-      const word = unopenedFiles.length === 1 ? 'file' : 'files';
-      const message = `Successfully loaded ${unopenedFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`;
+      const message = `Successfully loaded project files for '${project}' project in '${languageId}' language server.`;
       return this.response(message, false, {
         languageId,
         project,
@@ -680,8 +765,7 @@ export class Client {
       });
     }
     const elapsed = Date.now() - timer;
-    const word = projectFiles.length === 1 ? 'file' : 'files';
-    const message = `Successfully loaded ${projectFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`;
+    const message = `Successfully loaded project files for '${project}' project in '${languageId}' language server.`;
     return this.response(message, false, {
       languageId,
       project,
