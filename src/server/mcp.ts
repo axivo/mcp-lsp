@@ -122,9 +122,9 @@ interface GetOutgoingCallsArgs {
 }
 
 interface GetProjectSymbolsArgs extends ProjectArgs {
+  query: string;
   limit?: number;
   offset?: number;
-  query?: string;
   timeout?: number;
 }
 
@@ -215,6 +215,14 @@ interface ResolveArgs {
 
 interface RestartServerArgs extends LanguageIdArgs {
   project: string;
+}
+
+interface ServerStatus {
+  status: 'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured';
+  uptime: string;
+  error?: string;
+  languageId?: string;
+  project?: string;
 }
 
 interface ServerTools {
@@ -638,12 +646,12 @@ export class McpServer {
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
-          limit: { type: 'number', description: `Pagination limit for number of symbols to return (default: ${this.toolPaginationLimit})`, default: this.toolPaginationLimit },
-          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip (default: 0)', default: 0 },
-          query: { type: 'string', description: 'Symbol search query (default: empty)', default: '' },
+          query: { type: 'string', description: 'Symbol search query' },
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.toolPaginationLimit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
-        required: ['language_id', 'project']
+        required: ['language_id', 'project', 'query']
       }
     };
   }
@@ -939,8 +947,8 @@ export class McpServer {
         type: 'object',
         properties: {
           file_path: { type: 'string', description: 'Path to the project file' },
-          limit: { type: 'number', description: `Pagination limit for number of symbols to return (default: ${this.toolPaginationLimit})`, default: this.toolPaginationLimit },
-          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip (default: 0)', default: 0 }
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.toolPaginationLimit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 }
         },
         required: ['file_path']
       }
@@ -1329,13 +1337,14 @@ export class McpServer {
    * @returns {Promise<any>} Tool execution response
    */
   private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project']);
+    const error = this.validateArgs(args, ['language_id', 'project', 'query']);
     if (error) return error;
     const projectId = this.client.getProjectId(args.language_id);
     if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.project) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    const params: WorkspaceSymbolParams = { query: args.query ?? '' };
+    const timer = Date.now();
+    const params: WorkspaceSymbolParams = { query: args.query };
     const fullResult = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
     if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
       return this.client.response(fullResult);
@@ -1346,11 +1355,13 @@ export class McpServer {
     const paginatedItems = fullResult.slice(offset, offset + limit);
     const more = offset + limit < total;
     const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
+    const elapsed = Date.now() - timer;
     const data = {
-      symbols: paginatedItems,
       language_id: args.language_id,
       project: args.project,
-      query: args.query
+      query: args.query,
+      symbols: paginatedItems,
+      time: `${elapsed}ms`
     };
     const pagination: PageMetadata = { more, offset, total };
     return this.client.response(description, false, { data, pagination });
@@ -1519,10 +1530,53 @@ export class McpServer {
    * 
    * @private
    * @param {GetServerStatusArgs} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
+   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Tool execution response
    */
-  private async handleGetServerStatus(args: GetServerStatusArgs): Promise<any> {
-    return await this.client.getServerStatus(args.language_id);
+  private async handleGetServerStatus(args: GetServerStatusArgs): Promise<ServerStatus | Record<string, ServerStatus>> {
+    if (!args.language_id) {
+      const statusPromises = this.client.getServers().map(async (languageId) => {
+        try {
+          const connection = this.client.isServerRunning(languageId);
+          const uptime = this.client.getServerUptime(languageId);
+          if (!connection) {
+            return [languageId, { status: 'stopped', uptime: `0ms` }];
+          }
+          const serverConnection = this.client.getServerConnection(languageId);
+          if (!serverConnection || !serverConnection.initialized) {
+            const project = serverConnection?.name;
+            return [languageId, { status: 'starting', uptime: `${uptime}ms`, languageId, project }];
+          }
+          const project = serverConnection.name;
+          return [languageId, { status: 'ready', uptime: `${uptime}ms`, languageId, project }];
+        } catch (error) {
+          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
+        }
+      });
+      const results = await Promise.allSettled(statusPromises);
+      const statusEntries = results.map(result => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
+        }
+      });
+      return Object.fromEntries(statusEntries);
+    }
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return { status: 'unconfigured', uptime: `0ms` };
+    }
+    const connection = this.client.isServerRunning(args.language_id);
+    if (!connection) {
+      return { status: 'stopped', uptime: `0ms` };
+    }
+    const serverConnection = this.client.getServerConnection(args.language_id);
+    const uptime = this.client.getServerUptime(args.language_id);
+    if (!serverConnection || !serverConnection.initialized) {
+      const project = serverConnection?.name;
+      return { status: 'starting', uptime: `${uptime}ms`, languageId: args.language_id, project };
+    }
+    const project = serverConnection.name;
+    return { status: 'ready', uptime: `${uptime}ms`, languageId: args.language_id, project };
   }
 
   /**
@@ -1639,6 +1693,7 @@ export class McpServer {
   private async handleGetSymbols(args: GetSymbolsArgs): Promise<any> {
     const error = this.validateArgs(args, ['file_path']);
     if (error) return error;
+    const timer = Date.now();
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1652,9 +1707,11 @@ export class McpServer {
     const paginatedItems = fullResult.slice(offset, offset + limit);
     const more = offset + limit < total;
     const description = `Showing ${paginatedItems.length} of ${total} document symbols.`;
+    const elapsed = Date.now() - timer;
     const data = {
       symbols: paginatedItems,
-      file_path: args.file_path
+      file_path: args.file_path,
+      time: `${elapsed}ms`
     };
     const pagination: PageMetadata = { more, offset, total };
     return this.client.response(description, false, { data, pagination });
@@ -1915,7 +1972,20 @@ export class McpServer {
   private setupToolHandlers(): void {
     const tools = this.setServerTools();
     for (const { tool, handler } of tools) {
-      this.toolHandlers.set(tool.name, handler);
+      const wrappedHandler: ToolHandler = async (args: any) => {
+        const processedArgs = { ...args };
+        const properties = tool.inputSchema?.properties;
+        if (properties) {
+          Object.entries(properties).forEach(([name, value]) => {
+            const schema = value as { default?: unknown };
+            if (processedArgs[name] === undefined && schema.default !== undefined) {
+              processedArgs[name] = schema.default;
+            }
+          });
+        }
+        return await handler(processedArgs);
+      };
+      this.toolHandlers.set(tool.name, wrappedHandler);
     }
   }
 

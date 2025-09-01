@@ -82,14 +82,6 @@ type ServerResponse = {
   data?: unknown;
 };
 
-interface ServerStatus {
-  status: 'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured';
-  uptime: string;
-  error?: string;
-  languageId?: string;
-  project?: string;
-}
-
 /**
  * LSP Process Manager and Communication Client
  * 
@@ -602,59 +594,6 @@ export class Client {
    */
   getServers(): string[] {
     return this.config.getServers();
-  }
-
-  /**
-   * Gets the status of language servers
-   * 
-   * @param {string} [languageId] - Optional language identifier to get status for a specific server
-   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Promise that resolves with server status information
-   */
-  async getServerStatus(languageId?: string): Promise<ServerStatus | Record<string, ServerStatus>> {
-    if (!languageId) {
-      const statusPromises = this.getServers().map(async (languageId) => {
-        try {
-          const connection = this.isServerRunning(languageId);
-          const uptime = this.getServerUptime(languageId);
-          if (!connection) {
-            return [languageId, { status: 'stopped', uptime: `0ms` }];
-          }
-          const serverConnection = this.getServerConnection(languageId);
-          if (!serverConnection || !serverConnection.initialized) {
-            const project = serverConnection?.name;
-            return [languageId, { status: 'starting', uptime: `${uptime}ms`, languageId, project }];
-          }
-          const project = serverConnection.name;
-          return [languageId, { status: 'ready', uptime: `${uptime}ms`, languageId, project }];
-        } catch (error) {
-          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
-        }
-      });
-      const results = await Promise.allSettled(statusPromises);
-      const statusEntries = results.map(result => {
-        if (result.status === 'fulfilled') {
-          return result.value;
-        } else {
-          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
-        }
-      });
-      return Object.fromEntries(statusEntries);
-    }
-    if (!this.config.hasServerConfig(languageId)) {
-      return { status: 'unconfigured', uptime: `0ms` };
-    }
-    const connection = this.isServerRunning(languageId);
-    if (!connection) {
-      return { status: 'stopped', uptime: `0ms` };
-    }
-    const serverConnection = this.getServerConnection(languageId);
-    const uptime = this.getServerUptime(languageId);
-    if (!serverConnection || !serverConnection.initialized) {
-      const project = serverConnection?.name;
-      return { status: 'starting', uptime: `${uptime}ms`, languageId, project };
-    }
-    const project = serverConnection.name;
-    return { status: 'ready', uptime: `${uptime}ms`, languageId, project };
   }
 
   /**
