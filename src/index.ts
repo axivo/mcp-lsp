@@ -13,6 +13,26 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { McpServer } from './server/mcp.js';
 
+interface CodeError {
+  code: string;
+}
+
+/**
+ * Check if an error is an EPIPE error that should be ignored
+ * 
+ * @param {unknown} err - The error to check
+ * @returns {boolean} True if this is an EPIPE error, false otherwise
+ */
+function isEpipeError(err: unknown): boolean {
+  if (!(err instanceof Error)) {
+    return false;
+  }
+  if (err.message?.includes('EPIPE') || ('code' in err && (err as CodeError).code === 'EPIPE')) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Main entry point for the LSP MCP Server
  * 
@@ -26,8 +46,8 @@ import { McpServer } from './server/mcp.js';
 async function main(): Promise<void> {
   process.on('uncaughtException', (error) => {
     console.error('Uncaught exception:', error.message);
-    if (error.message.includes('EPIPE') || (error as any).code === 'EPIPE') {
-      console.error('EPIPE error caught - continuing operation');
+    if (isEpipeError(error)) {
+      console.error('EPIPE error caught, continuing operation.');
       return;
     }
     console.error('Fatal error:', error);
@@ -35,9 +55,8 @@ async function main(): Promise<void> {
   });
   process.on('unhandledRejection', (reason, promise) => {
     console.error('Unhandled rejection at:', promise, 'reason:', reason);
-    if (reason && typeof reason === 'object' &&
-      ((reason as any).code === 'EPIPE' || (reason as Error).message?.includes('EPIPE'))) {
-      console.error('EPIPE rejection caught - continuing operation');
+    if (reason && isEpipeError(reason)) {
+      console.error('EPIPE rejection caught, continuing operation.');
       return;
     }
   });

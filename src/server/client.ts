@@ -10,7 +10,7 @@ import { deepmerge } from 'deepmerge-ts';
 import fg from 'fast-glob';
 import gracefulFs from 'graceful-fs';
 import { ChildProcess, spawn } from 'node:child_process';
-import { dirname, join } from 'node:path';
+import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import pLimit from 'p-limit';
@@ -221,7 +221,7 @@ export class Client {
    * @returns {string | null} Project name of the running server that handles the file, or null if not found
    */
   private getServerInfo(filePath: string): string | null {
-    const absolutePath = filePath.startsWith('/') ? filePath : join(process.cwd(), filePath);
+    const absolutePath = isAbsolute(filePath) ? filePath : join(process.cwd(), filePath);
     const cachedProject = this.languageIdCache.get(absolutePath);
     if (cachedProject) {
       return cachedProject;
@@ -506,21 +506,21 @@ export class Client {
    */
   private setProcessHandlers(project: string, process: ChildProcess): void {
     const cleanup = () => {
-      this.connections.delete(project);
-      this.openedFiles.delete(project);
-      this.projectFiles.delete(project);
       for (const [languageId, projectName] of this.projectId.entries()) {
         if (projectName === project) {
           this.projectId.delete(languageId);
           break;
         }
       }
-      this.serverStartTimes.delete(project);
       for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
         if (cachedProject === project) {
           this.languageIdCache.delete(filePath);
         }
       }
+      this.connections.delete(project);
+      this.openedFiles.delete(project);
+      this.projectFiles.delete(project);
+      this.serverStartTimes.delete(project);
     };
     process.on('error', cleanup);
     process.on('exit', cleanup);
@@ -670,11 +670,25 @@ export class Client {
       }
       const elapsed = Date.now() - timer;
       const word = unopenedFiles.length === 1 ? 'file' : 'files';
-      return this.response(`Successfully loaded ${unopenedFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`);
+      const message = `Successfully loaded ${unopenedFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`;
+      return this.response(message, false, {
+        languageId,
+        project,
+        projectFiles: unopenedFiles.length,
+        projectLoadTime: `${elapsed}ms`,
+        projectPath: projectConfig.path
+      });
     }
     const elapsed = Date.now() - timer;
     const word = projectFiles.length === 1 ? 'file' : 'files';
-    return this.response(`Successfully loaded ${projectFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`);
+    const message = `Successfully loaded ${projectFiles.length} ${word} after ${elapsed}ms for '${project}' project in '${languageId}' language server.`;
+    return this.response(message, false, {
+      languageId,
+      project,
+      projectFiles: projectFiles.length,
+      projectLoadTime: `${elapsed}ms`,
+      projectPath: projectConfig.path
+    });
   }
 
   /**
@@ -708,7 +722,17 @@ export class Client {
     if (project) {
       await this.stopServer(project);
       this.initializedProjects.delete(project);
-      return await this.startServer(languageId, project);
+      const startTime = Date.now();
+      const startResponse = await this.startServer(languageId, project);
+      const message = `Successfully restarted '${languageId}' language server with '${project}' project.`;
+      const responseData = startResponse.data as { projectPath?: string; serverPid?: number };
+      return this.response(message, false, {
+        languageId,
+        project,
+        projectPath: responseData.projectPath,
+        serverPid: responseData.serverPid,
+        serverStartTime: new Date(startTime).toISOString()
+      });
     } else {
       return this.response(`Language server '${languageId}' with '${project}' project is not running.`);
     }
@@ -854,6 +878,7 @@ export class Client {
       return this.response(`Language server '${languageId}' with '${selectedProject.name}' project is already running.`);
     }
     try {
+      const startTime = Date.now();
       const childProcess = spawn(serverConfig.command, serverConfig.args, {
         cwd: selectedProject.path,
         env: { ...process.env },
@@ -871,10 +896,17 @@ export class Client {
       };
       this.projectId.set(languageId, selectedProject.name);
       this.connections.set(selectedProject.name, serverConnection);
-      this.serverStartTimes.set(selectedProject.name, Date.now());
+      this.serverStartTimes.set(selectedProject.name, startTime);
       this.setProcessHandlers(selectedProject.name, childProcess);
       await this.initializeServer(languageId, selectedProject.name);
-      return this.response(`Successfully started '${languageId}' language server with '${selectedProject.name}' project.`);
+      const message = `Successfully started '${languageId}' language server with '${selectedProject.name}' project.`;
+      return this.response(message, false, {
+        languageId,
+        project: selectedProject.name,
+        projectPath: selectedProject.path,
+        serverPid: childProcess.pid,
+        serverStartTime: new Date(startTime).toISOString()
+      });
     } catch (error) {
       return this.response(`Failed to start '${languageId}' language server: ${error}`);
     }
@@ -899,16 +931,12 @@ export class Client {
         break;
       }
     }
-    this.connections.delete(project);
-    this.openedFiles.delete(project);
-    this.projectFiles.delete(project);
     for (const [languageId, projectName] of this.projectId.entries()) {
       if (projectName === project) {
         this.projectId.delete(languageId);
         break;
       }
     }
-    this.serverStartTimes.delete(project);
     for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
       if (cachedProject === project) {
         this.languageIdCache.delete(filePath);
@@ -929,6 +957,10 @@ export class Client {
     if (!serverConnection.process.killed) {
       serverConnection.process.kill('SIGKILL');
     }
+    this.connections.delete(project);
+    this.openedFiles.delete(project);
+    this.projectFiles.delete(project);
+    this.serverStartTimes.delete(project);
   }
 
   /**
