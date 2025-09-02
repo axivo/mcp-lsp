@@ -752,20 +752,31 @@ export class Client {
   }
 
   /**
-   * Restarts a specific language server
+   * Restarts a language server with the same or a different project
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @returns {Promise<ServerResponse>} Promise that resolves when server is restarted
+   * @param {string} project - Project name to start after stopping
+   * @returns {Promise<ServerResponse>} Promise that resolves with restart result
    */
   async restartServer(languageId: string, project: string): Promise<ServerResponse> {
     if (!this.config.hasServerConfig(languageId)) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
-    if (project) {
-      await this.stopServer(project);
-      this.initializedProjects.delete(project);
+    if (!this.projectId.has(languageId)) {
+      return this.response(`Language server '${languageId}' is not running.`);
+    }
+    const serverConfig = this.config.getServerConfig(languageId);
+    const projectConfig = serverConfig.projects.find(id => id.name === project);
+    if (!projectConfig) {
+      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
+    }
+    try {
       const timer = Date.now();
+      const runningProject = this.projectId.get(languageId);
+      if (runningProject) {
+        await this.stopServer(runningProject);
+        this.initializedProjects.delete(runningProject);
+      }
       const startResponse = await this.startServer(languageId, project);
       const message = `Successfully restarted '${languageId}' language server with '${project}' project.`;
       const responseData = startResponse.data as { path?: string; pid?: number };
@@ -776,8 +787,8 @@ export class Client {
         pid: responseData.pid,
         time: new Date(timer).toISOString()
       });
-    } else {
-      return this.response(`Language server '${languageId}' with '${project}' project is not running.`);
+    } catch (error) {
+      return this.response(`Error restarting '${languageId}' language server: ${error}`);
     }
   }
 
@@ -915,8 +926,9 @@ export class Client {
     if (!selectedProject) {
       return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
     }
-    if (this.connections.has(selectedProject.name)) {
-      return this.response(`Language server '${languageId}' with '${selectedProject.name}' project is already running.`);
+    if (this.projectId.has(languageId)) {
+      const runningProject = this.projectId.get(languageId);
+      return this.response(`Language server '${languageId}' with '${runningProject}' project is already running.`);
     }
     try {
       const timer = Date.now();

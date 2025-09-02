@@ -227,6 +227,7 @@ interface ServerStatus {
   uptime: string;
   error?: string;
   languageId?: string;
+  pid?: number;
   project?: string;
 }
 
@@ -1599,15 +1600,17 @@ export class McpServer {
           const connection = this.client.isServerRunning(languageId);
           const uptime = this.client.getServerUptime(languageId);
           if (!connection) {
-            return [languageId, { status: 'stopped', uptime: `0ms` }];
+            return [languageId, { languageId, status: 'stopped', uptime: `0ms` }];
           }
           const serverConnection = this.client.getServerConnection(languageId);
           if (!serverConnection || !serverConnection.initialized) {
+            const pid = serverConnection?.process?.pid;
             const project = serverConnection?.name;
-            return [languageId, { status: 'starting', uptime: `${uptime}ms`, languageId, project }];
+            return [languageId, { languageId, project, pid, status: 'starting', uptime: `${uptime}ms` }];
           }
+          const pid = serverConnection.process.pid;
           const project = serverConnection.name;
-          return [languageId, { status: 'ready', uptime: `${uptime}ms`, languageId, project }];
+          return [languageId, { languageId, project, pid, status: 'ready', uptime: `${uptime}ms` }];
         } catch (error) {
           return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
         }
@@ -1623,20 +1626,22 @@ export class McpServer {
       return Object.fromEntries(statusEntries);
     }
     if (!this.config.hasServerConfig(args.language_id)) {
-      return { status: 'unconfigured', uptime: `0ms` };
+      return { languageId: args.language_id, status: 'unconfigured', uptime: `0ms` };
     }
     const connection = this.client.isServerRunning(args.language_id);
     if (!connection) {
-      return { status: 'stopped', uptime: `0ms` };
+      return { languageId: args.language_id, status: 'stopped', uptime: `0ms` };
     }
     const serverConnection = this.client.getServerConnection(args.language_id);
     const uptime = this.client.getServerUptime(args.language_id);
     if (!serverConnection || !serverConnection.initialized) {
+      const pid = serverConnection?.process?.pid;
       const project = serverConnection?.name;
-      return { status: 'starting', uptime: `${uptime}ms`, languageId: args.language_id, project };
+      return { languageId: args.language_id, project, pid, status: 'starting', uptime: `${uptime}ms` };
     }
+    const pid = serverConnection.process.pid;
     const project = serverConnection.name;
-    return { status: 'ready', uptime: `${uptime}ms`, languageId: args.language_id, project };
+    return { languageId: args.language_id, project, pid, status: 'ready', uptime: `${uptime}ms` };
   }
 
   /**
