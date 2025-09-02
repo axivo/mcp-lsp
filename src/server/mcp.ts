@@ -121,6 +121,11 @@ interface GetOutgoingCallsArgs {
   item: CallHierarchyItem;
 }
 
+interface GetProjectFilesArgs extends ProjectArgs {
+  limit?: number;
+  offset?: number;
+}
+
 interface GetProjectSymbolsArgs extends ProjectArgs {
   query: string;
   limit?: number;
@@ -637,6 +642,29 @@ export class McpServer {
    * @private
    * @returns {Tool} Project symbols tool
    */
+  private getProjectFilesTool(): Tool {
+    return {
+      name: 'get_project_files',
+      description: 'List all files in the project workspace',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Project name to list files from' },
+          limit: { type: 'number', description: 'Pagination limit for number of files to return', default: this.toolPaginationLimit },
+          offset: { type: 'number', description: 'Pagination offset for number of files to skip', default: 0 }
+        },
+        required: ['language_id', 'project']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for project symbol search
+   * 
+   * @private
+   * @returns {Tool} Project symbols tool
+   */
   private getProjectSymbolsTool(): Tool {
     return {
       name: 'get_project_symbols',
@@ -980,6 +1008,7 @@ export class McpServer {
       this.getLinkResolvesTool(),
       this.getLinksTool(),
       this.getOutgoingCallsTool(),
+      this.getProjectFilesTool(),
       this.getProjectSymbolsTool(),
       this.getRangeFormatTool(),
       this.getResolvesTool(),
@@ -1336,14 +1365,47 @@ export class McpServer {
    * @param {GetProjectSymbolsArgs} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
+  private async handleGetProjectFiles(args: GetProjectFilesArgs): Promise<any> {
+    const error = this.validateArgs(args, ['language_id', 'project']);
+    if (error) return error;
+    if (args.project !== this.client.getProjectId(args.language_id)) {
+      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projectConfig = serverConfig.projects.find(id => id.name === args.project) as { name: string, path: string };
+    const files = await this.client.getProjectFiles(args.language_id, args.project);
+    if (!files) {
+      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
+    }
+    const limit = args.limit ?? this.toolPaginationLimit;
+    const offset = args.offset ?? 0;
+    const total = files.length;
+    const paginatedFiles = files.slice(offset, offset + limit);
+    const more = offset + limit < total;
+    const description = `Showing ${paginatedFiles.length} of ${total} project files.`;
+    const data = {
+      language_id: args.language_id,
+      project: args.project,
+      files: paginatedFiles,
+      path: projectConfig.path
+    };
+    const pagination: PageMetadata = { more, offset, total };
+    return this.client.response(description, false, { data, pagination });
+  }
+
+  /**
+   * Handles project symbol search tool requests
+   * 
+   * @private
+   * @param {GetProjectSymbolsArgs} args - Tool arguments
+   * @returns {Promise<any>} Tool execution response
+   */
   private async handleGetProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
     const error = this.validateArgs(args, ['language_id', 'project', 'query']);
     if (error) return error;
-    const projectId = this.client.getProjectId(args.language_id);
-    if (!this.client.getServerConnection(args.language_id) || !projectId || projectId !== args.project) {
+    if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    const timer = Date.now();
     const params: WorkspaceSymbolParams = { query: args.query };
     const fullResult = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
     if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
@@ -1355,13 +1417,11 @@ export class McpServer {
     const paginatedItems = fullResult.slice(offset, offset + limit);
     const more = offset + limit < total;
     const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
-    const elapsed = Date.now() - timer;
     const data = {
       language_id: args.language_id,
       project: args.project,
       query: args.query,
-      symbols: paginatedItems,
-      time: `${elapsed}ms`
+      symbols: paginatedItems
     };
     const pagination: PageMetadata = { more, offset, total };
     return this.client.response(description, false, { data, pagination });
@@ -1930,6 +1990,7 @@ export class McpServer {
       { tool: this.getLinkResolvesTool(), capability: 'documentLinkProvider', handler: this.handleGetLinkResolves.bind(this) },
       { tool: this.getLinksTool(), capability: 'documentLinkProvider', handler: this.handleGetLinks.bind(this) },
       { tool: this.getOutgoingCallsTool(), capability: 'callHierarchyProvider', handler: this.handleGetOutgoingCalls.bind(this) },
+      { tool: this.getProjectFilesTool(), capability: 'serverOperations', handler: this.handleGetProjectFiles.bind(this) },
       { tool: this.getProjectSymbolsTool(), capability: 'workspaceSymbolProvider', handler: this.handleGetProjectSymbols.bind(this) },
       { tool: this.getRangeFormatTool(), capability: 'documentRangeFormattingProvider', handler: this.handleGetRangeFormat.bind(this) },
       { tool: this.getResolvesTool(), capability: 'completionProvider', handler: this.handleGetResolves.bind(this) },
