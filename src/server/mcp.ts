@@ -1840,7 +1840,7 @@ export class McpServer {
    * 
    * @private
    * @param {CallToolRequest} request - The tool execution request
-   * @returns {Promise<Object>} Response containing tool execution results
+   * @returns {Promise<any>} Response containing tool execution results
    */
   private async handleRequest(request: CallToolRequest): Promise<any> {
     if (!request.params.arguments) {
@@ -1904,7 +1904,7 @@ export class McpServer {
    * Handles tool listing requests from MCP clients
    * 
    * @private
-   * @returns {Promise<Object>} Response containing available tools
+   * @returns {Promise<any>} Response containing available tools
    */
   private async handleTools(): Promise<any> {
     return { tools: this.getTools() };
