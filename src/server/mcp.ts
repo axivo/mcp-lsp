@@ -16,7 +16,7 @@ import {
 } from '@modelcontextprotocol/sdk/types.js';
 import { Client } from './client.js';
 import { Config } from './config.js';
-import { McpTool } from './tool.js';
+import { GetServerCapabilities, McpTool } from './tool.js';
 
 interface ServerTools {
   capability: string;
@@ -940,6 +940,7 @@ export class McpServer {
    * @returns {ServerTools[]} Array of tool mappings
    */
   private setServerTools(): ServerTools[] {
+    const getServerCapabilities = (args: GetServerCapabilities) => this.tool.getServerCapabilities(args, this.setServerTools());
     return [
       { tool: this.getCallHierarchyTool(), capability: 'callHierarchyProvider', handler: this.tool.getCallHierarchy.bind(this.tool) },
       { tool: this.getCodeActionsTool(), capability: 'codeActionProvider', handler: this.tool.getCodeActions.bind(this.tool) },
@@ -964,7 +965,7 @@ export class McpServer {
       { tool: this.getResolvesTool(), capability: 'completionProvider', handler: this.tool.getResolves.bind(this.tool) },
       { tool: this.getSelectionRangeTool(), capability: 'selectionRangeProvider', handler: this.tool.getSelectionRange.bind(this.tool) },
       { tool: this.getSemanticTokensTool(), capability: 'semanticTokensProvider', handler: this.tool.getSemanticTokens.bind(this.tool) },
-      { tool: this.getServerCapabilitiesTool(), capability: 'serverOperations', handler: (args: any) => this.tool.getServerCapabilities(args, this.setServerTools()) },
+      { tool: this.getServerCapabilitiesTool(), capability: 'serverOperations', handler: getServerCapabilities },
       { tool: this.getServerProjectsTool(), capability: 'serverOperations', handler: this.tool.getServerProjects.bind(this.tool) },
       { tool: this.getServerStatusTool(), capability: 'serverOperations', handler: this.tool.getServerStatus.bind(this.tool) },
       { tool: this.getSignatureTool(), capability: 'signatureHelpProvider', handler: this.tool.getSignature.bind(this.tool) },

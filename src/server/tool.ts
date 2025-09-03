@@ -66,118 +66,118 @@ import { z } from 'zod';
 import { Client } from './client.js';
 import { Config } from './config.js';
 
-interface FilePathArgs {
+interface FilePath {
   file_path: string;
 }
 
-interface GetCallHierarchyArgs extends PositionArgs { }
+interface GetCallHierarchy extends Position { }
 
-interface GetCodeActionsArgs extends PositionArgs { }
+interface GetCodeActions extends Position { }
 
-interface GetCodeResolvesArgs extends ResolveArgs {
+interface GetCodeResolves extends Resolve {
   item: CodeAction;
 }
 
-interface GetColorsArgs extends FilePathArgs { }
+interface GetColors extends FilePath { }
 
-interface GetCompletionsArgs extends PositionArgs { }
+interface GetCompletions extends Position { }
 
-interface GetFoldingRangesArgs extends FilePathArgs { }
+interface GetFoldingRanges extends FilePath { }
 
-interface GetFormatArgs extends FilePathArgs { }
+interface GetFormat extends FilePath { }
 
-interface GetHighlightsArgs extends PositionArgs { }
+interface GetHighlights extends Position { }
 
-interface GetHoverArgs extends PositionArgs { }
+interface GetHover extends Position { }
 
-interface GetImplementationsArgs extends PositionArgs { }
+interface GetImplementations extends Position { }
 
-interface GetIncomingCallsArgs {
+interface GetIncomingCalls {
   item: CallHierarchyItem;
 }
 
-interface GetInlayHintArgs extends ResolveArgs {
+interface GetInlayHint extends Resolve {
   item: InlayHint;
 }
 
-interface GetInlayHintsArgs extends RangeArgs { }
+interface GetInlayHints extends Range { }
 
-interface GetLinkedEditingRangeArgs extends PositionArgs { }
+interface GetLinkedEditingRange extends Position { }
 
-interface GetLinkResolvesArgs extends ResolveArgs {
+interface GetLinkResolves extends Resolve {
   item: DocumentLink;
 }
 
-interface GetLinksArgs extends FilePathArgs { }
+interface GetLinks extends FilePath { }
 
-interface GetOutgoingCallsArgs {
+interface GetOutgoingCalls {
   item: CallHierarchyItem;
 }
 
-interface GetProjectFilesArgs extends ProjectArgs {
+interface GetProjectFiles extends Project {
   limit?: number;
   offset?: number;
 }
 
-interface GetProjectSymbolsArgs extends ProjectArgs {
+interface GetProjectSymbols extends Project {
   query: string;
   limit?: number;
   offset?: number;
   timeout?: number;
 }
 
-interface GetRangeFormatArgs extends RangeArgs { }
+interface GetRangeFormat extends Range { }
 
-interface GetResolvesArgs extends ResolveArgs {
+interface GetResolves extends Resolve {
   item: CompletionItem;
 }
 
-interface GetSelectionRangeArgs extends PositionArgs { }
+interface GetSelectionRange extends Position { }
 
-interface GetSemanticTokensArgs extends FilePathArgs { }
+interface GetSemanticTokens extends FilePath { }
 
-interface GetServerCapabilitiesArgs extends LanguageIdArgs { }
+export interface GetServerCapabilities extends LanguageId { }
 
-interface GetServerProjectsArgs extends LanguageIdArgs { }
+interface GetServerProjects extends LanguageId { }
 
-interface GetServerStatusArgs {
+interface GetServerStatus {
   language_id?: string;
 }
 
-interface GetSignatureArgs extends PositionArgs { }
+interface GetSignature extends Position { }
 
-interface GetSubtypesArgs {
+interface GetSubtypes {
   item: TypeHierarchyItem;
 }
 
-interface GetSupertypesArgs {
+interface GetSupertypes {
   item: TypeHierarchyItem;
 }
 
-interface GetSymbolDefinitionsArgs extends PositionArgs { }
+interface GetSymbolDefinitions extends Position { }
 
-interface GetSymbolReferencesArgs extends PositionArgs {
+interface GetSymbolReferences extends Position {
   include_declaration?: boolean;
 }
 
-interface GetSymbolRenamesArgs extends PositionArgs {
+interface GetSymbolRenames extends Position {
   new_name: string;
 }
 
-interface GetSymbolsArgs extends FilePathArgs {
+interface GetSymbols extends FilePath {
   limit?: number;
   offset?: number;
 }
 
-interface GetTypeDefinitionsArgs extends PositionArgs { }
+interface GetTypeDefinitions extends Position { }
 
-interface GetTypeHierarchyArgs extends PositionArgs { }
+interface GetTypeHierarchy extends Position { }
 
-interface LanguageIdArgs {
+interface LanguageId {
   language_id: string;
 }
 
-interface LoadProjectFilesArgs extends ProjectArgs {
+interface LoadProjectFiles extends Project {
   timeout?: number;
 }
 
@@ -187,18 +187,18 @@ interface PageMetadata {
   total: number;
 }
 
-interface PositionArgs {
+interface Position {
   character: number;
   file_path: string;
   line: number;
 }
 
-interface ProjectArgs {
+interface Project {
   language_id: string;
   project: string;
 }
 
-interface RangeArgs {
+interface Range {
   end_character: number;
   end_line: number;
   file_path: string;
@@ -206,12 +206,12 @@ interface RangeArgs {
   start_line: number;
 }
 
-interface ResolveArgs {
+interface Resolve {
   file_path: string;
   item: any;
 }
 
-interface RestartServerArgs extends LanguageIdArgs {
+interface RestartServer extends LanguageId {
   project: string;
 }
 
@@ -224,11 +224,11 @@ interface ServerStatus {
   project?: string;
 }
 
-interface StartServerArgs extends LanguageIdArgs {
+interface StartServer extends LanguageId {
   project?: string;
 }
 
-interface StopServerArgs extends LanguageIdArgs { }
+interface StopServer extends LanguageId { }
 
 interface SupportedTools {
   supported: boolean;
@@ -302,11 +302,11 @@ export class McpTool {
   /**
    * Get call hierarchy tool requests
    * 
-   * @param {GetCallHierarchyArgs} args - Tool arguments
+   * @param {GetCallHierarchy} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getCallHierarchy(args: GetCallHierarchyArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getCallHierarchy(args: GetCallHierarchy): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: CallHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
@@ -318,11 +318,11 @@ export class McpTool {
   /**
    * Get code actions tool requests
    * 
-   * @param {GetCodeActionsArgs} args - Tool arguments
+   * @param {GetCodeActions} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getCodeActions(args: GetCodeActionsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getCodeActions(args: GetCodeActions): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: CodeActionParams = {
       context: { diagnostics: [] },
@@ -338,11 +338,11 @@ export class McpTool {
   /**
    * Get code resolves tool requests
    * 
-   * @param {GetCodeResolvesArgs} args - Tool arguments
+   * @param {GetCodeResolves} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getCodeResolves(args: GetCodeResolvesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'item']);
+  async getCodeResolves(args: GetCodeResolves): Promise<any> {
+    const error = this.validate(args, ['file_path', 'item']);
     if (error) return error;
     return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
   }
@@ -350,11 +350,11 @@ export class McpTool {
   /**
    * Get colors tool requests
    * 
-   * @param {GetColorsArgs} args - Tool arguments
+   * @param {GetColors} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getColors(args: GetColorsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getColors(args: GetColors): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
@@ -365,11 +365,11 @@ export class McpTool {
   /**
    * Get completions tool requests
    * 
-   * @param {GetCompletionsArgs} args - Tool arguments
+   * @param {GetCompletions} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getCompletions(args: GetCompletionsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getCompletions(args: GetCompletions): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -381,11 +381,11 @@ export class McpTool {
   /**
    * Get folding ranges tool requests
    * 
-   * @param {GetFoldingRangesArgs} args - Tool arguments
+   * @param {GetFoldingRanges} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getFoldingRanges(args: GetFoldingRangesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getFoldingRanges(args: GetFoldingRanges): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
@@ -396,11 +396,11 @@ export class McpTool {
   /**
    * Get format tool requests
    * 
-   * @param {GetFormatArgs} args - Tool arguments
+   * @param {GetFormat} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getFormat(args: GetFormatArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getFormat(args: GetFormat): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const params = {
       options: { tabSize: 2, insertSpaces: true },
@@ -412,11 +412,11 @@ export class McpTool {
   /**
    * Get highlights tool requests
    * 
-   * @param {GetHighlightsArgs} args - Tool arguments
+   * @param {GetHighlights} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getHighlights(args: GetHighlightsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getHighlights(args: GetHighlights): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -428,11 +428,11 @@ export class McpTool {
   /**
    * Get hover tool requests
    * 
-   * @param {GetHoverArgs} args - Tool arguments
+   * @param {GetHover} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getHover(args: GetHoverArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getHover(args: GetHover): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -444,11 +444,11 @@ export class McpTool {
   /**
    * Get implementations tool requests
    * 
-   * @param {GetImplementationsArgs} args - Tool arguments
+   * @param {GetImplementations} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getImplementations(args: GetImplementationsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'character', 'line']);
+  async getImplementations(args: GetImplementations): Promise<any> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -460,11 +460,11 @@ export class McpTool {
   /**
    * Get incoming calls tool requests
    * 
-   * @param {GetIncomingCallsArgs} args - Tool arguments
+   * @param {GetIncomingCalls} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getIncomingCalls(args: GetIncomingCallsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['item']);
+  async getIncomingCalls(args: GetIncomingCalls): Promise<any> {
+    const error = this.validate(args, ['item']);
     if (error) return error;
     const params: CallHierarchyIncomingCallsParams = {
       item: args.item
@@ -476,11 +476,11 @@ export class McpTool {
   /**
    * Get inlay hint tool requests
    * 
-   * @param {GetInlayHintArgs} args - Tool arguments
+   * @param {GetInlayHint} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getInlayHint(args: GetInlayHintArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'item']);
+  async getInlayHint(args: GetInlayHint): Promise<any> {
+    const error = this.validate(args, ['file_path', 'item']);
     if (error) return error;
     return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
   }
@@ -488,11 +488,11 @@ export class McpTool {
   /**
    * Get inlay hints tool requests
    * 
-   * @param {GetInlayHintsArgs} args - Tool arguments
+   * @param {GetInlayHints} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getInlayHints(args: GetInlayHintsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
+  async getInlayHints(args: GetInlayHints): Promise<any> {
+    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
     if (error) return error;
     const params: InlayHintParams = {
       range: {
@@ -507,11 +507,11 @@ export class McpTool {
   /**
    * Get linked editing range tool requests
    * 
-   * @param {GetLinkedEditingRangeArgs} args - Tool arguments
+   * @param {GetLinkedEditingRange} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getLinkedEditingRange(args: GetLinkedEditingRangeArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getLinkedEditingRange(args: GetLinkedEditingRange): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: LinkedEditingRangeParams = {
       position: { character: args.character, line: args.line },
@@ -523,11 +523,11 @@ export class McpTool {
   /**
    * Get link resolves tool requests
    * 
-   * @param {GetLinkResolvesArgs} args - Tool arguments
+   * @param {GetLinkResolves} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getLinkResolves(args: GetLinkResolvesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'item']);
+  async getLinkResolves(args: GetLinkResolves): Promise<any> {
+    const error = this.validate(args, ['file_path', 'item']);
     if (error) return error;
     return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
   }
@@ -535,11 +535,11 @@ export class McpTool {
   /**
    * Get links tool requests
    * 
-   * @param {GetLinksArgs} args - Tool arguments
+   * @param {GetLinks} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getLinks(args: GetLinksArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getLinks(args: GetLinks): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
@@ -550,11 +550,11 @@ export class McpTool {
   /**
    * Get outgoing calls tool requests
    * 
-   * @param {GetOutgoingCallsArgs} args - Tool arguments
+   * @param {GetOutgoingCalls} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getOutgoingCalls(args: GetOutgoingCallsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['item']);
+  async getOutgoingCalls(args: GetOutgoingCalls): Promise<any> {
+    const error = this.validate(args, ['item']);
     if (error) return error;
     const params: CallHierarchyOutgoingCallsParams = {
       item: args.item
@@ -566,11 +566,11 @@ export class McpTool {
   /**
    * Get project files tool requests
    * 
-   * @param {GetProjectFilesArgs} args - Tool arguments
+   * @param {GetProjectFiles} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getProjectFiles(args: GetProjectFilesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project']);
+  async getProjectFiles(args: GetProjectFiles): Promise<any> {
+    const error = this.validate(args, ['language_id', 'project']);
     if (error) return error;
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
@@ -600,11 +600,11 @@ export class McpTool {
   /**
    * Get project symbol search tool requests
    * 
-   * @param {GetProjectSymbolsArgs} args - Tool arguments
+   * @param {GetProjectSymbols} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getProjectSymbols(args: GetProjectSymbolsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project', 'query']);
+  async getProjectSymbols(args: GetProjectSymbols): Promise<any> {
+    const error = this.validate(args, ['language_id', 'project', 'query']);
     if (error) return error;
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
@@ -633,11 +633,11 @@ export class McpTool {
   /**
    * Get range format tool requests
    * 
-   * @param {GetRangeFormatArgs} args - Tool arguments
+   * @param {GetRangeFormat} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getRangeFormat(args: GetRangeFormatArgs): Promise<any> {
-    const error = this.validateArgs(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
+  async getRangeFormat(args: GetRangeFormat): Promise<any> {
+    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
     if (error) return error;
     const params = {
       options: { tabSize: 2, insertSpaces: true },
@@ -653,11 +653,11 @@ export class McpTool {
   /**
    * Get resolves tool requests
    * 
-   * @param {GetResolvesArgs} args - Tool arguments
+   * @param {GetResolves} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getResolves(args: GetResolvesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path', 'item']);
+  async getResolves(args: GetResolves): Promise<any> {
+    const error = this.validate(args, ['file_path', 'item']);
     if (error) return error;
     const params = {
       ...args.item,
@@ -669,11 +669,11 @@ export class McpTool {
   /**
    * Get selection range tool requests
    * 
-   * @param {GetSelectionRangeArgs} args - Tool arguments
+   * @param {GetSelectionRange} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSelectionRange(args: GetSelectionRangeArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getSelectionRange(args: GetSelectionRange): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: SelectionRangeParams = {
       positions: [{ character: args.character, line: args.line }],
@@ -685,11 +685,11 @@ export class McpTool {
   /**
    * Get semantic tokens tool requests
    * 
-   * @param {GetSemanticTokensArgs} args - Tool arguments
+   * @param {GetSemanticTokens} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSemanticTokens(args: GetSemanticTokensArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getSemanticTokens(args: GetSemanticTokens): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const params: SemanticTokensParams = {
       textDocument: { uri: `file://${args.file_path}` }
@@ -700,12 +700,12 @@ export class McpTool {
   /**
    * Get server capabilities tool requests
    * 
-   * @param {GetServerCapabilitiesArgs} args - Tool arguments
+   * @param {GetServerCapabilities} args - Tool arguments
    * @param {ToolCapabilities[]} [toolCapabilities] - Optional tool capabilities from McpServer
    * @returns {Promise<any>} Tool execution response
    */
-  async getServerCapabilities(args: GetServerCapabilitiesArgs, toolCapabilities?: ToolCapabilities[]): Promise<any> {
-    const error = this.validateArgs(args, ['language_id']);
+  async getServerCapabilities(args: GetServerCapabilities, toolCapabilities?: ToolCapabilities[]): Promise<any> {
+    const error = this.validate(args, ['language_id']);
     if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
@@ -725,11 +725,11 @@ export class McpTool {
   /**
    * Get server projects tool requests
    * 
-   * @param {GetServerProjectsArgs} args - Tool arguments
+   * @param {GetServerProjects} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getServerProjects(args: GetServerProjectsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id']);
+  async getServerProjects(args: GetServerProjects): Promise<any> {
+    const error = this.validate(args, ['language_id']);
     if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
@@ -752,10 +752,10 @@ export class McpTool {
   /**
    * Get server status tool requests
    * 
-   * @param {GetServerStatusArgs} args - Tool arguments
+   * @param {GetServerStatus} args - Tool arguments
    * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Tool execution response
    */
-  async getServerStatus(args: GetServerStatusArgs): Promise<ServerStatus | Record<string, ServerStatus>> {
+  async getServerStatus(args: GetServerStatus): Promise<ServerStatus | Record<string, ServerStatus>> {
     if (!args.language_id) {
       const statusPromises = this.client.getServers().map(async (languageId) => {
         try {
@@ -809,11 +809,11 @@ export class McpTool {
   /**
    * Get signature tool requests
    * 
-   * @param {GetSignatureArgs} args - Tool arguments
+   * @param {GetSignature} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSignature(args: GetSignatureArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getSignature(args: GetSignature): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -825,11 +825,11 @@ export class McpTool {
   /**
    * Get subtypes tool requests
    * 
-   * @param {GetSubtypesArgs} args - Tool arguments
+   * @param {GetSubtypes} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSubtypes(args: GetSubtypesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['item']);
+  async getSubtypes(args: GetSubtypes): Promise<any> {
+    const error = this.validate(args, ['item']);
     if (error) return error;
     const params: TypeHierarchySubtypesParams = {
       item: args.item
@@ -841,11 +841,11 @@ export class McpTool {
   /**
    * Get supertypes tool requests
    * 
-   * @param {GetSupertypesArgs} args - Tool arguments
+   * @param {GetSupertypes} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSupertypes(args: GetSupertypesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['item']);
+  async getSupertypes(args: GetSupertypes): Promise<any> {
+    const error = this.validate(args, ['item']);
     if (error) return error;
     const params: TypeHierarchySupertypesParams = {
       item: args.item
@@ -857,11 +857,11 @@ export class McpTool {
   /**
    * Get symbol definitions tool requests
    * 
-   * @param {GetSymbolDefinitionsArgs} args - Tool arguments
+   * @param {GetSymbolDefinitions} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSymbolDefinitions(args: GetSymbolDefinitionsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getSymbolDefinitions(args: GetSymbolDefinitions): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -873,11 +873,11 @@ export class McpTool {
   /**
    * Get symbol references tool requests
    * 
-   * @param {GetSymbolReferencesArgs} args - Tool arguments
+   * @param {GetSymbolReferences} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSymbolReferences(args: GetSymbolReferencesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getSymbolReferences(args: GetSymbolReferences): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: ReferenceParams = {
       context: { includeDeclaration: args.include_declaration ?? true },
@@ -890,11 +890,11 @@ export class McpTool {
   /**
    * Get symbol renames tool requests
    * 
-   * @param {GetSymbolRenamesArgs} args - Tool arguments
+   * @param {GetSymbolRenames} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSymbolRenames(args: GetSymbolRenamesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line', 'new_name']);
+  async getSymbolRenames(args: GetSymbolRenames): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line', 'new_name']);
     if (error) return error;
     const params: RenameParams = {
       newName: args.new_name,
@@ -907,11 +907,11 @@ export class McpTool {
   /**
    * Get symbols tool requests
    * 
-   * @param {GetSymbolsArgs} args - Tool arguments
+   * @param {GetSymbols} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getSymbols(args: GetSymbolsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['file_path']);
+  async getSymbols(args: GetSymbols): Promise<any> {
+    const error = this.validate(args, ['file_path']);
     if (error) return error;
     const timer = Date.now();
     const params = {
@@ -940,11 +940,11 @@ export class McpTool {
   /**
    * Get type definitions tool requests
    * 
-   * @param {GetTypeDefinitionsArgs} args - Tool arguments
+   * @param {GetTypeDefinitions} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getTypeDefinitions(args: GetTypeDefinitionsArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getTypeDefinitions(args: GetTypeDefinitions): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
@@ -956,11 +956,11 @@ export class McpTool {
   /**
    * Get type hierarchy tool requests
    * 
-   * @param {GetTypeHierarchyArgs} args - Tool arguments
+   * @param {GetTypeHierarchy} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async getTypeHierarchy(args: GetTypeHierarchyArgs): Promise<any> {
-    const error = this.validateArgs(args, ['character', 'file_path', 'line']);
+  async getTypeHierarchy(args: GetTypeHierarchy): Promise<any> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
     if (error) return error;
     const params: TypeHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
@@ -972,11 +972,11 @@ export class McpTool {
   /**
    * Load project files tool requests
    * 
-   * @param {LoadProjectFilesArgs} args - Tool arguments
+   * @param {LoadProjectFiles} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async loadProjectFiles(args: LoadProjectFilesArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project']);
+  async loadProjectFiles(args: LoadProjectFiles): Promise<any> {
+    const error = this.validate(args, ['language_id', 'project']);
     if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
@@ -990,11 +990,11 @@ export class McpTool {
   /**
    * Restart server tool requests
    * 
-   * @param {RestartServerArgs} args - Tool arguments
+   * @param {RestartServer} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async restartServer(args: RestartServerArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id', 'project']);
+  async restartServer(args: RestartServer): Promise<any> {
+    const error = this.validate(args, ['language_id', 'project']);
     if (error) return error;
     return await this.client.restartServer(args.language_id, args.project);
   }
@@ -1002,11 +1002,11 @@ export class McpTool {
   /**
    * Start server tool requests
    * 
-   * @param {StartServerArgs} args - Tool arguments
+   * @param {StartServer} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async startServer(args: StartServerArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id']);
+  async startServer(args: StartServer): Promise<any> {
+    const error = this.validate(args, ['language_id']);
     if (error) return error;
     return await this.client.startServer(args.language_id, args.project);
   }
@@ -1014,11 +1014,11 @@ export class McpTool {
   /**
    * Stop server tool requests
    * 
-   * @param {StopServerArgs} args - Tool arguments
+   * @param {StopServer} args - Tool arguments
    * @returns {Promise<any>} Tool execution response
    */
-  async stopServer(args: StopServerArgs): Promise<any> {
-    const error = this.validateArgs(args, ['language_id']);
+  async stopServer(args: StopServer): Promise<any> {
+    const error = this.validate(args, ['language_id']);
     if (error) return error;
     if (!this.client.isServerRunning(args.language_id)) {
       return `Language server '${args.language_id}' is not running.`;
@@ -1055,7 +1055,7 @@ export class McpTool {
    * @param {string[]} fields - Required field names
    * @returns {string | null} Error message if validation fails, null if all required fields are present
    */
-  private validateArgs(args: unknown, fields: string[]): string | null {
+  private validate(args: unknown, fields: string[]): string | null {
     const type: Record<string, z.ZodType> = {};
     for (const field of fields) {
       if (field === 'query') {
