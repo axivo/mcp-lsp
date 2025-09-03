@@ -1,5 +1,5 @@
 /**
- * MCP Tool Definitions
+ * LSP MCP Tool Definitions
  * 
  * @module server/tool
  * @author AXIVO
@@ -703,48 +703,6 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting type definitions
-   * 
-   * @returns {Tool} Type definitions tool
-   */
-  getTypeDefinitions(): Tool {
-    return {
-      name: 'get_type_definitions',
-      description: 'Navigate to where symbol type is defined',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          character: { type: 'number', description: 'Character position (zero-based)' },
-          file_path: { type: 'string', description: 'Path to the project file' },
-          line: { type: 'number', description: 'Line number (zero-based)' }
-        },
-        required: ['character', 'file_path', 'line']
-      }
-    };
-  }
-
-  /**
-   * Tool definition for getting type hierarchy
-   * 
-   * @returns {Tool} Get type hierarchy tool
-   */
-  getTypeHierarchy(): Tool {
-    return {
-      name: 'get_type_hierarchy',
-      description: 'Build type hierarchy showing inheritance relationships',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          character: { type: 'number', description: 'Character position (zero-based)' },
-          file_path: { type: 'string', description: 'Path to the project file' },
-          line: { type: 'number', description: 'Line number (zero-based)' }
-        },
-        required: ['character', 'file_path', 'line']
-      }
-    };
-  }
-
-  /**
    * Returns all available MCP tools
    * 
    * @returns {Tool[]} Array of MCP tool definitions
@@ -791,6 +749,48 @@ export class McpTool {
       this.startServer(),
       this.stopServer()
     ];
+  }
+
+  /**
+   * Tool definition for getting type definitions
+   * 
+   * @returns {Tool} Type definitions tool
+   */
+  getTypeDefinitions(): Tool {
+    return {
+      name: 'get_type_definitions',
+      description: 'Navigate to where symbol type is defined',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting type hierarchy
+   * 
+   * @returns {Tool} Get type hierarchy tool
+   */
+  getTypeHierarchy(): Tool {
+    return {
+      name: 'get_type_hierarchy',
+      description: 'Build type hierarchy showing inheritance relationships',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
   }
 
   /**
