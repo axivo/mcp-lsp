@@ -6,6 +6,7 @@
  * @license BSD-3-Clause
  */
 
+import { Tool } from '@modelcontextprotocol/sdk/types.js';
 import {
   CallHierarchyIncomingCallsParams,
   CallHierarchyIncomingCallsRequest,
@@ -229,6 +230,16 @@ interface StartServerArgs extends LanguageIdArgs {
 
 interface StopServerArgs extends LanguageIdArgs { }
 
+interface SupportedTools {
+  supported: boolean;
+  tools: Tool[];
+}
+
+interface ToolCapabilities {
+  capability: string;
+  tool: Tool;
+}
+
 /**
  * MCP Tool Implementation
  * 
@@ -259,13 +270,13 @@ export class McpTool {
    * Generates capability to tool mapping based on server capabilities
    * 
    * @param {ServerCapabilities} capabilities - Server capabilities object
-   * @param {Array} toolMappings - Tool to capability mappings from McpServer
-   * @returns {Record<string, any>} Mapping of capabilities to tool definitions
+   * @param {ToolCapabilities[]} toolCapabilities - Tool to capability mappings from McpServer
+   * @returns {Record<string, SupportedTools>} Mapping of capabilities to tool definitions
    */
-  generateCapabilityToolMap(capabilities: ServerCapabilities, toolMappings: Array<{ tool: any; capability: string }>): Record<string, any> {
-    const server = new Map<string, any[]>();
-    const toolMap: Record<string, any> = {};
-    for (const { tool, capability } of toolMappings) {
+  generateCapabilityToolMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
+    const server = new Map<string, Tool[]>();
+    const toolMap: Record<string, SupportedTools> = {};
+    for (const { tool, capability } of toolCapabilities) {
       if (!server.has(capability)) {
         server.set(capability, []);
       }
@@ -274,16 +285,16 @@ export class McpTool {
     for (const [capability, value] of Object.entries(capabilities)) {
       if (value) {
         if (server.has(capability)) {
-          const tool = server.get(capability)!;
-          toolMap[capability] = tool.length === 1 ? tool[0] : tool;
+          const tools = server.get(capability)!;
+          toolMap[capability] = { supported: true, tools };
         } else {
-          toolMap[capability] = null;
+          toolMap[capability] = { supported: false, tools: [] };
         }
       }
     }
     const serverOperations = server.get('serverOperations');
     if (serverOperations && serverOperations.length) {
-      toolMap['serverOperations'] = serverOperations;
+      toolMap['serverOperations'] = { supported: true, tools: serverOperations };
     }
     return toolMap;
   }
@@ -690,10 +701,10 @@ export class McpTool {
    * Get server capabilities tool requests
    * 
    * @param {GetServerCapabilitiesArgs} args - Tool arguments
-   * @param {Array} [toolMappings] - Optional tool mappings from McpServer
+   * @param {ToolCapabilities[]} [toolCapabilities] - Optional tool capabilities from McpServer
    * @returns {Promise<any>} Tool execution response
    */
-  async getServerCapabilities(args: GetServerCapabilitiesArgs, toolMappings?: Array<{ tool: any; capability: string }>): Promise<any> {
+  async getServerCapabilities(args: GetServerCapabilitiesArgs, toolCapabilities?: ToolCapabilities[]): Promise<any> {
     const error = this.validateArgs(args, ['language_id']);
     if (error) return error;
     if (!this.config.hasServerConfig(args.language_id)) {
@@ -707,7 +718,7 @@ export class McpTool {
     if (!capabilities) {
       return `Capabilities not available for '${args.language_id}' language server.`;
     }
-    const tools = toolMappings ? this.generateCapabilityToolMap(capabilities, toolMappings) : {};
+    const tools = toolCapabilities ? this.generateCapabilityToolMap(capabilities, toolCapabilities) : {};
     return { language_id: args.language_id, project, capabilities, tools };
   }
 
