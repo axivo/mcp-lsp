@@ -251,19 +251,19 @@ interface ToolCapabilities {
 export class McpTool {
   private client: Client;
   private config: Config;
-  private paginationLimit: number;
+  private limit: number;
 
   /**
    * Creates a new McpTool instance
    * 
    * @param {Client} client - LSP client manager instance
    * @param {Config} config - Configuration parser instance
-   * @param {number} paginationLimit - Pagination limit for tool results
+   * @param {number} limit - Pagination limit for tool results
    */
-  constructor(client: Client, config: Config, paginationLimit: number) {
+  constructor(client: Client, config: Config, limit: number) {
     this.client = client;
     this.config = config;
-    this.paginationLimit = paginationLimit;
+    this.limit = limit;
   }
 
   /**
@@ -581,7 +581,7 @@ export class McpTool {
     if (!files) {
       return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
     }
-    const limit = args.limit ?? this.paginationLimit;
+    const limit = args.limit ?? this.limit;
     const offset = args.offset ?? 0;
     const total = files.length;
     const paginatedFiles = files.slice(offset, offset + limit);
@@ -614,7 +614,7 @@ export class McpTool {
     if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
       return this.client.response(fullResult);
     }
-    const limit = args.limit ?? this.paginationLimit;
+    const limit = args.limit ?? this.limit;
     const offset = args.offset ?? 0;
     const total = fullResult.length;
     const paginatedItems = fullResult.slice(offset, offset + limit);
@@ -921,7 +921,7 @@ export class McpTool {
     if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
       return this.client.response(fullResult);
     }
-    const limit = args.limit ?? this.paginationLimit;
+    const limit = args.limit ?? this.limit;
     const offset = args.offset ?? 0;
     const total = fullResult.length;
     const paginatedItems = fullResult.slice(offset, offset + limit);

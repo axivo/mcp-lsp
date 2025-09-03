@@ -34,7 +34,7 @@ type ToolHandler = (args: any) => Promise<any>;
 export class McpServer {
   private client: Client;
   private config: Config;
-  private paginationLimit: number;
+  private limit: number;
   private server: Server;
   private tool: McpTool;
   private toolHandler: Map<string, ToolHandler>;
@@ -48,12 +48,12 @@ export class McpServer {
   constructor(configPath: string) {
     this.client = new Client(configPath);
     this.config = new Config(configPath);
-    this.paginationLimit = 250;
+    this.limit = 250;
     this.server = new Server(
       { name: 'language-server-protocol', version: this.client.version() },
       { capabilities: { tools: {} } }
     );
-    this.tool = new McpTool(this.client, this.config, this.paginationLimit);
+    this.tool = new McpTool(this.client, this.config, this.limit);
     this.toolHandler = new Map<string, ToolHandler>();
     this.setupToolHandlers();
     this.setupHandlers();
@@ -435,7 +435,7 @@ export class McpServer {
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to list files from' },
-          limit: { type: 'number', description: 'Pagination limit for number of files to return', default: this.paginationLimit },
+          limit: { type: 'number', description: 'Pagination limit for number of files to return', default: this.limit },
           offset: { type: 'number', description: 'Pagination offset for number of files to skip', default: 0 }
         },
         required: ['language_id', 'project']
@@ -459,7 +459,7 @@ export class McpServer {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
           query: { type: 'string', description: 'Symbol search query' },
-          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.paginationLimit },
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
           offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
@@ -759,7 +759,7 @@ export class McpServer {
         type: 'object',
         properties: {
           file_path: { type: 'string', description: 'Path to the project file' },
-          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.paginationLimit },
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
           offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 }
         },
         required: ['file_path']
