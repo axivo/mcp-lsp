@@ -1,5 +1,5 @@
 /**
- * LSP Configuration Parser
+ * Configuration Parser
  * 
  * @module server/config
  * @author AXIVO

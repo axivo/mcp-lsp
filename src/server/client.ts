@@ -1,5 +1,5 @@
 /**
- * LSP Process Manager and Communication Client
+ * Communication Client
  * 
  * @module server/client
  * @author AXIVO

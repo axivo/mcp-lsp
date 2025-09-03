@@ -1,5 +1,5 @@
 /**
- * LSP MCP Tool Definitions
+ * MCP Tool Definitions
  * 
  * @module server/tool
  * @author AXIVO

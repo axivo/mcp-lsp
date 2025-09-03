@@ -1,9 +1,6 @@
 #!/usr/bin/env node
 /**
- * LSP MCP Server Entry Point
- * 
- * Main entry point for the LSP MCP server application. Handles environment
- * validation, server initialization, and transport setup.
+ * MCP Server Entry Point
  * 
  * @module index
  * @author AXIVO

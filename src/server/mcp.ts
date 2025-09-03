@@ -1,5 +1,5 @@
 /**
- * LSP MCP Server implementation
+ * MCP Server implementation
  * 
  * @module server/mcp
  * @author AXIVO
@@ -290,15 +290,15 @@ export class McpServer {
   }
 
   /**
-   * Generates capability to tool mapping based on server capabilities
+   * Generates tools map based on server capabilities
    * 
    * @param {ServerCapabilities} capabilities - Server capabilities object
    * @param {ToolCapabilities[]} toolCapabilities - Tool to capability mappings from McpServer
    * @returns {Record<string, SupportedTools>} Mapping of capabilities to tool definitions
    */
-  generateCapabilityToolMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
+  generateToolsMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
     const server = new Map<string, Tool[]>();
-    const toolMap: Record<string, SupportedTools> = {};
+    const toolsMap: Record<string, SupportedTools> = {};
     for (const { tool, capability } of toolCapabilities) {
       if (!server.has(capability)) {
         server.set(capability, []);
@@ -309,17 +309,17 @@ export class McpServer {
       if (value) {
         if (server.has(capability)) {
           const tools = server.get(capability)!;
-          toolMap[capability] = { supported: true, tools };
+          toolsMap[capability] = { supported: true, tools };
         } else {
-          toolMap[capability] = { supported: false, tools: [] };
+          toolsMap[capability] = { supported: false, tools: [] };
         }
       }
     }
     const serverOperations = server.get('serverOperations');
     if (serverOperations && serverOperations.length) {
-      toolMap['serverOperations'] = { supported: true, tools: serverOperations };
+      toolsMap['serverOperations'] = { supported: true, tools: serverOperations };
     }
-    return toolMap;
+    return toolsMap;
   }
 
   /**
@@ -744,7 +744,7 @@ export class McpServer {
     if (!toolCapabilities) {
       toolCapabilities = this.setServerTools().map(({ tool, capability }) => ({ tool, capability }));
     }
-    const tools = this.generateCapabilityToolMap(capabilities, toolCapabilities);
+    const tools = this.generateToolsMap(capabilities, toolCapabilities);
     return { language_id: args.language_id, project, capabilities, tools };
   }
 
