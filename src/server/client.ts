@@ -77,7 +77,7 @@ interface ServerConnection {
   process: ChildProcess;
 }
 
-type ServerResponse = {
+export type ServerResponse = {
   content: Array<{ type: 'text'; text: string }>;
   data?: unknown;
 };
