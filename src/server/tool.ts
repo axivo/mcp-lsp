@@ -1,1079 +1,875 @@
 /**
- * MCP Tools Implementation
+ * MCP Tool Definitions
  * 
- * @module server/tools
+ * @module server/tool
  * @author AXIVO
  * @license BSD-3-Clause
  */
 
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
-import {
-  CallHierarchyIncomingCallsParams,
-  CallHierarchyIncomingCallsRequest,
-  CallHierarchyItem,
-  CallHierarchyOutgoingCallsParams,
-  CallHierarchyOutgoingCallsRequest,
-  CallHierarchyPrepareParams,
-  CallHierarchyPrepareRequest,
-  CodeAction,
-  CodeActionParams,
-  CodeActionRequest,
-  CodeActionResolveRequest,
-  CompletionItem,
-  CompletionRequest,
-  CompletionResolveRequest,
-  DefinitionRequest,
-  DocumentColorRequest,
-  DocumentFormattingRequest,
-  DocumentHighlightRequest,
-  DocumentLink,
-  DocumentLinkRequest,
-  DocumentLinkResolveRequest,
-  DocumentRangeFormattingRequest,
-  DocumentSymbolRequest,
-  FoldingRangeRequest,
-  HoverRequest,
-  ImplementationRequest,
-  InlayHint,
-  InlayHintParams,
-  InlayHintRequest,
-  InlayHintResolveRequest,
-  LinkedEditingRangeParams,
-  LinkedEditingRangeRequest,
-  ReferenceParams,
-  ReferencesRequest,
-  RenameParams,
-  RenameRequest,
-  SelectionRangeParams,
-  SelectionRangeRequest,
-  SemanticTokensParams,
-  SemanticTokensRequest,
-  ServerCapabilities,
-  SignatureHelpRequest,
-  TextDocumentPositionParams,
-  TypeDefinitionRequest,
-  TypeHierarchyItem,
-  TypeHierarchyPrepareParams,
-  TypeHierarchyPrepareRequest,
-  TypeHierarchySubtypesParams,
-  TypeHierarchySubtypesRequest,
-  TypeHierarchySupertypesParams,
-  TypeHierarchySupertypesRequest,
-  WorkspaceSymbolParams,
-  WorkspaceSymbolRequest
-} from 'vscode-languageserver-protocol';
-import { z } from 'zod';
-import { Client } from './client.js';
-import { Config } from './config.js';
-
-interface FilePath {
-  file_path: string;
-}
-
-interface GetCallHierarchy extends Position { }
-
-interface GetCodeActions extends Position { }
-
-interface GetCodeResolves extends Resolve {
-  item: CodeAction;
-}
-
-interface GetColors extends FilePath { }
-
-interface GetCompletions extends Position { }
-
-interface GetFoldingRanges extends FilePath { }
-
-interface GetFormat extends FilePath { }
-
-interface GetHighlights extends Position { }
-
-interface GetHover extends Position { }
-
-interface GetImplementations extends Position { }
-
-interface GetIncomingCalls {
-  item: CallHierarchyItem;
-}
-
-interface GetInlayHint extends Resolve {
-  item: InlayHint;
-}
-
-interface GetInlayHints extends Range { }
-
-interface GetLinkedEditingRange extends Position { }
-
-interface GetLinkResolves extends Resolve {
-  item: DocumentLink;
-}
-
-interface GetLinks extends FilePath { }
-
-interface GetOutgoingCalls {
-  item: CallHierarchyItem;
-}
-
-interface GetProjectFiles extends Project {
-  limit?: number;
-  offset?: number;
-}
-
-interface GetProjectSymbols extends Project {
-  query: string;
-  limit?: number;
-  offset?: number;
-  timeout?: number;
-}
-
-interface GetRangeFormat extends Range { }
-
-interface GetResolves extends Resolve {
-  item: CompletionItem;
-}
-
-interface GetSelectionRange extends Position { }
-
-interface GetSemanticTokens extends FilePath { }
-
-export interface GetServerCapabilities extends LanguageId { }
-
-interface GetServerProjects extends LanguageId { }
-
-interface GetServerStatus {
-  language_id?: string;
-}
-
-interface GetSignature extends Position { }
-
-interface GetSubtypes {
-  item: TypeHierarchyItem;
-}
-
-interface GetSupertypes {
-  item: TypeHierarchyItem;
-}
-
-interface GetSymbolDefinitions extends Position { }
-
-interface GetSymbolReferences extends Position {
-  include_declaration?: boolean;
-}
-
-interface GetSymbolRenames extends Position {
-  new_name: string;
-}
-
-interface GetSymbols extends FilePath {
-  limit?: number;
-  offset?: number;
-}
-
-interface GetTypeDefinitions extends Position { }
-
-interface GetTypeHierarchy extends Position { }
-
-interface LanguageId {
-  language_id: string;
-}
-
-interface LoadProjectFiles extends Project {
-  timeout?: number;
-}
-
-interface PageMetadata {
-  more: boolean;
-  offset: number;
-  total: number;
-}
-
-interface Position {
-  character: number;
-  file_path: string;
-  line: number;
-}
-
-interface Project {
-  language_id: string;
-  project: string;
-}
-
-interface Range {
-  end_character: number;
-  end_line: number;
-  file_path: string;
-  start_character: number;
-  start_line: number;
-}
-
-interface Resolve {
-  file_path: string;
-  item: any;
-}
-
-interface RestartServer extends LanguageId {
-  project: string;
-}
-
-interface ServerStatus {
-  status: 'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured';
-  uptime: string;
-  error?: string;
-  languageId?: string;
-  pid?: number;
-  project?: string;
-}
-
-interface StartServer extends LanguageId {
-  project?: string;
-}
-
-interface StopServer extends LanguageId { }
-
-interface SupportedTools {
-  supported: boolean;
-  tools: Tool[];
-}
-
-interface ToolCapabilities {
-  capability: string;
-  tool: Tool;
-}
 
 /**
- * MCP Tool Implementation
+ * MCP Tool Definitions
  * 
- * Handles all LSP tool operations and server management functionality
- * for the MCP server.
+ * Provides tool definitions for LSP operations exposed through the MCP protocol
  * 
- * @class Tool
+ * @class McpTool
  */
 export class McpTool {
-  private client: Client;
-  private config: Config;
   private limit: number;
 
   /**
    * Creates a new McpTool instance
    * 
-   * @param {Client} client - LSP client manager instance
-   * @param {Config} config - Configuration parser instance
    * @param {number} limit - Pagination limit for tool results
    */
-  constructor(client: Client, config: Config, limit: number) {
-    this.client = client;
-    this.config = config;
+  constructor(limit: number) {
     this.limit = limit;
   }
 
   /**
-   * Generates capability to tool mapping based on server capabilities
+   * Tool definition for getting call hierarchy
    * 
-   * @param {ServerCapabilities} capabilities - Server capabilities object
-   * @param {ToolCapabilities[]} toolCapabilities - Tool to capability mappings from McpServer
-   * @returns {Record<string, SupportedTools>} Mapping of capabilities to tool definitions
+   * @returns {Tool} Get call hierarchy tool
    */
-  generateCapabilityToolMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
-    const server = new Map<string, Tool[]>();
-    const toolMap: Record<string, SupportedTools> = {};
-    for (const { tool, capability } of toolCapabilities) {
-      if (!server.has(capability)) {
-        server.set(capability, []);
+  getCallHierarchy(): Tool {
+    return {
+      name: 'get_call_hierarchy',
+      description: 'Build call hierarchy showing caller and callee relationships',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
-      server.get(capability)!.push(tool);
-    }
-    for (const [capability, value] of Object.entries(capabilities)) {
-      if (value) {
-        if (server.has(capability)) {
-          const tools = server.get(capability)!;
-          toolMap[capability] = { supported: true, tools };
-        } else {
-          toolMap[capability] = { supported: false, tools: [] };
-        }
+    };
+  }
+
+  /**
+   * Tool definition for getting code actions
+   * 
+   * @returns {Tool} Code actions tool
+   */
+  getCodeActions(): Tool {
+    return {
+      name: 'get_code_actions',
+      description: 'Get automated code fixes and refactoring suggestions at cursor position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
       }
-    }
-    const serverOperations = server.get('serverOperations');
-    if (serverOperations && serverOperations.length) {
-      toolMap['serverOperations'] = { supported: true, tools: serverOperations };
-    }
-    return toolMap;
-  }
-
-  /**
-   * Get call hierarchy tool requests
-   * 
-   * @param {GetCallHierarchy} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getCallHierarchy(args: GetCallHierarchy): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: CallHierarchyPrepareParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
     };
-    return await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
   }
 
   /**
-   * Get code actions tool requests
+   * Tool definition for resolving code actions
    * 
-   * @param {GetCodeActions} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
+   * @returns {Tool} Code action resolve tool
    */
-  async getCodeActions(args: GetCodeActions): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: CodeActionParams = {
-      context: { diagnostics: [] },
-      range: {
-        start: { character: args.character, line: args.line },
-        end: { character: args.character, line: args.line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
-  }
-
-  /**
-   * Get code resolves tool requests
-   * 
-   * @param {GetCodeResolves} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getCodeResolves(args: GetCodeResolves): Promise<any> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
-  }
-
-  /**
-   * Get colors tool requests
-   * 
-   * @param {GetColors} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getColors(args: GetColors): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
-  }
-
-  /**
-   * Get completions tool requests
-   * 
-   * @param {GetCompletions} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getCompletions(args: GetCompletions): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
-  }
-
-  /**
-   * Get folding ranges tool requests
-   * 
-   * @param {GetFoldingRanges} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getFoldingRanges(args: GetFoldingRanges): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
-  }
-
-  /**
-   * Get format tool requests
-   * 
-   * @param {GetFormat} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getFormat(args: GetFormat): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      options: { tabSize: 2, insertSpaces: true },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
-  }
-
-  /**
-   * Get highlights tool requests
-   * 
-   * @param {GetHighlights} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getHighlights(args: GetHighlights): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentHighlightRequest.method, params);
-  }
-
-  /**
-   * Get hover tool requests
-   * 
-   * @param {GetHover} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getHover(args: GetHover): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
-  }
-
-  /**
-   * Get implementations tool requests
-   * 
-   * @param {GetImplementations} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getImplementations(args: GetImplementations): Promise<any> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
-  }
-
-  /**
-   * Get incoming calls tool requests
-   * 
-   * @param {GetIncomingCalls} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getIncomingCalls(args: GetIncomingCalls): Promise<any> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: CallHierarchyIncomingCallsParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
-  }
-
-  /**
-   * Get inlay hint tool requests
-   * 
-   * @param {GetInlayHint} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getInlayHint(args: GetInlayHint): Promise<any> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
-  }
-
-  /**
-   * Get inlay hints tool requests
-   * 
-   * @param {GetInlayHints} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getInlayHints(args: GetInlayHints): Promise<any> {
-    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
-    const params: InlayHintParams = {
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
-  }
-
-  /**
-   * Get linked editing range tool requests
-   * 
-   * @param {GetLinkedEditingRange} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getLinkedEditingRange(args: GetLinkedEditingRange): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: LinkedEditingRangeParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
-  }
-
-  /**
-   * Get link resolves tool requests
-   * 
-   * @param {GetLinkResolves} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getLinkResolves(args: GetLinkResolves): Promise<any> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
-  }
-
-  /**
-   * Get links tool requests
-   * 
-   * @param {GetLinks} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getLinks(args: GetLinks): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
-  }
-
-  /**
-   * Get outgoing calls tool requests
-   * 
-   * @param {GetOutgoingCalls} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getOutgoingCalls(args: GetOutgoingCalls): Promise<any> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: CallHierarchyOutgoingCallsParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
-  }
-
-  /**
-   * Get project files tool requests
-   * 
-   * @param {GetProjectFiles} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getProjectFiles(args: GetProjectFiles): Promise<any> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    if (args.project !== this.client.getProjectId(args.language_id)) {
-      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projectConfig = serverConfig.projects.find(id => id.name === args.project) as { name: string, path: string };
-    const files = await this.client.getProjectFiles(args.language_id, args.project);
-    if (!files) {
-      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
-    }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = files.length;
-    const paginatedFiles = files.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedFiles.length} of ${total} project files.`;
-    const data = {
-      language_id: args.language_id,
-      project: args.project,
-      files: paginatedFiles,
-      path: projectConfig.path
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
-  }
-
-  /**
-   * Get project symbol search tool requests
-   * 
-   * @param {GetProjectSymbols} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getProjectSymbols(args: GetProjectSymbols): Promise<any> {
-    const error = this.validate(args, ['language_id', 'project', 'query']);
-    if (error) return error;
-    if (args.project !== this.client.getProjectId(args.language_id)) {
-      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
-    }
-    const params: WorkspaceSymbolParams = { query: args.query };
-    const fullResult = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
-    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
-      return this.client.response(fullResult);
-    }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = fullResult.length;
-    const paginatedItems = fullResult.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
-    const data = {
-      language_id: args.language_id,
-      project: args.project,
-      query: args.query,
-      symbols: paginatedItems
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
-  }
-
-  /**
-   * Get range format tool requests
-   * 
-   * @param {GetRangeFormat} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getRangeFormat(args: GetRangeFormat): Promise<any> {
-    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
-    const params = {
-      options: { tabSize: 2, insertSpaces: true },
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
-  }
-
-  /**
-   * Get resolves tool requests
-   * 
-   * @param {GetResolves} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getResolves(args: GetResolves): Promise<any> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    const params = {
-      ...args.item,
-      uri: `file://${args.file_path}`
-    };
-    return await this.client.sendServerRequest(args.file_path, CompletionResolveRequest.method, params);
-  }
-
-  /**
-   * Get selection range tool requests
-   * 
-   * @param {GetSelectionRange} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSelectionRange(args: GetSelectionRange): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: SelectionRangeParams = {
-      positions: [{ character: args.character, line: args.line }],
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
-  }
-
-  /**
-   * Get semantic tokens tool requests
-   * 
-   * @param {GetSemanticTokens} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSemanticTokens(args: GetSemanticTokens): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params: SemanticTokensParams = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SemanticTokensRequest.method, params);
-  }
-
-  /**
-   * Get server capabilities tool requests
-   * 
-   * @param {GetServerCapabilities} args - Tool arguments
-   * @param {ToolCapabilities[]} [toolCapabilities] - Optional tool capabilities from McpServer
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getServerCapabilities(args: GetServerCapabilities, toolCapabilities?: ToolCapabilities[]): Promise<any> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const project = this.client.getProjectId(args.language_id);
-    const capabilities = this.client.getServerCapabilities(args.language_id);
-    if (!capabilities) {
-      return `Capabilities not available for '${args.language_id}' language server.`;
-    }
-    const tools = toolCapabilities ? this.generateCapabilityToolMap(capabilities, toolCapabilities) : {};
-    return { language_id: args.language_id, project, capabilities, tools };
-  }
-
-  /**
-   * Get server projects tool requests
-   * 
-   * @param {GetServerProjects} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getServerProjects(args: GetServerProjects): Promise<any> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projects = serverConfig.projects.map(project => ({
-      name: project.name,
-      path: project.path,
-      extensions: serverConfig.extensions,
-      configuration: serverConfig.configuration ?? {},
-      description: project.description ?? '',
-      url: project.url ?? ''
-    }));
-    return projects;
-  }
-
-  /**
-   * Get server status tool requests
-   * 
-   * @param {GetServerStatus} args - Tool arguments
-   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Tool execution response
-   */
-  async getServerStatus(args: GetServerStatus): Promise<ServerStatus | Record<string, ServerStatus>> {
-    if (!args.language_id) {
-      const statusPromises = this.client.getServers().map(async (languageId) => {
-        try {
-          const connection = this.client.isServerRunning(languageId);
-          const uptime = this.client.getServerUptime(languageId);
-          if (!connection) {
-            return [languageId, { languageId, status: 'stopped', uptime: `0ms` }];
-          }
-          const serverConnection = this.client.getServerConnection(languageId);
-          if (!serverConnection || !serverConnection.initialized) {
-            const pid = serverConnection?.process?.pid;
-            const project = serverConnection?.name;
-            return [languageId, { languageId, project, pid, status: 'starting', uptime: `${uptime}ms` }];
-          }
-          const pid = serverConnection.process.pid;
-          const project = serverConnection.name;
-          return [languageId, { languageId, project, pid, status: 'ready', uptime: `${uptime}ms` }];
-        } catch (error) {
-          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
-        }
-      });
-      const results = await Promise.allSettled(statusPromises);
-      const statusEntries = results.map(result => {
-        if (result.status === 'fulfilled') {
-          return result.value;
-        } else {
-          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
-        }
-      });
-      return Object.fromEntries(statusEntries);
-    }
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return { languageId: args.language_id, status: 'unconfigured', uptime: `0ms` };
-    }
-    const connection = this.client.isServerRunning(args.language_id);
-    if (!connection) {
-      return { languageId: args.language_id, status: 'stopped', uptime: `0ms` };
-    }
-    const serverConnection = this.client.getServerConnection(args.language_id);
-    const uptime = this.client.getServerUptime(args.language_id);
-    if (!serverConnection || !serverConnection.initialized) {
-      const pid = serverConnection?.process?.pid;
-      const project = serverConnection?.name;
-      return { languageId: args.language_id, project, pid, status: 'starting', uptime: `${uptime}ms` };
-    }
-    const pid = serverConnection.process.pid;
-    const project = serverConnection.name;
-    return { languageId: args.language_id, project, pid, status: 'ready', uptime: `${uptime}ms` };
-  }
-
-  /**
-   * Get signature tool requests
-   * 
-   * @param {GetSignature} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSignature(args: GetSignature): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
-  }
-
-  /**
-   * Get subtypes tool requests
-   * 
-   * @param {GetSubtypes} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSubtypes(args: GetSubtypes): Promise<any> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: TypeHierarchySubtypesParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
-  }
-
-  /**
-   * Get supertypes tool requests
-   * 
-   * @param {GetSupertypes} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSupertypes(args: GetSupertypes): Promise<any> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: TypeHierarchySupertypesParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
-  }
-
-  /**
-   * Get symbol definitions tool requests
-   * 
-   * @param {GetSymbolDefinitions} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSymbolDefinitions(args: GetSymbolDefinitions): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
-  }
-
-  /**
-   * Get symbol references tool requests
-   * 
-   * @param {GetSymbolReferences} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSymbolReferences(args: GetSymbolReferences): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: ReferenceParams = {
-      context: { includeDeclaration: args.include_declaration ?? true },
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
-  }
-
-  /**
-   * Get symbol renames tool requests
-   * 
-   * @param {GetSymbolRenames} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSymbolRenames(args: GetSymbolRenames): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line', 'new_name']);
-    if (error) return error;
-    const params: RenameParams = {
-      newName: args.new_name,
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
-  }
-
-  /**
-   * Get symbols tool requests
-   * 
-   * @param {GetSymbols} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getSymbols(args: GetSymbols): Promise<any> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const timer = Date.now();
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    const fullResult = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
-    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
-      return this.client.response(fullResult);
-    }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = fullResult.length;
-    const paginatedItems = fullResult.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedItems.length} of ${total} document symbols.`;
-    const elapsed = Date.now() - timer;
-    const data = {
-      symbols: paginatedItems,
-      file_path: args.file_path,
-      time: `${elapsed}ms`
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
-  }
-
-  /**
-   * Get type definitions tool requests
-   * 
-   * @param {GetTypeDefinitions} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getTypeDefinitions(args: GetTypeDefinitions): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
-  }
-
-  /**
-   * Get type hierarchy tool requests
-   * 
-   * @param {GetTypeHierarchy} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async getTypeHierarchy(args: GetTypeHierarchy): Promise<any> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TypeHierarchyPrepareParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
-  }
-
-  /**
-   * Load project files tool requests
-   * 
-   * @param {LoadProjectFiles} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async loadProjectFiles(args: LoadProjectFiles): Promise<any> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    return await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
-  }
-
-  /**
-   * Restart server tool requests
-   * 
-   * @param {RestartServer} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async restartServer(args: RestartServer): Promise<any> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    return await this.client.restartServer(args.language_id, args.project);
-  }
-
-  /**
-   * Start server tool requests
-   * 
-   * @param {StartServer} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async startServer(args: StartServer): Promise<any> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    return await this.client.startServer(args.language_id, args.project);
-  }
-
-  /**
-   * Stop server tool requests
-   * 
-   * @param {StopServer} args - Tool arguments
-   * @returns {Promise<any>} Tool execution response
-   */
-  async stopServer(args: StopServer): Promise<any> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const connection = this.client.getServerConnection(args.language_id);
-    if (connection) {
-      await this.client.stopServer(connection.name);
-    }
-    return `Successfully stopped '${args.language_id}' language server.`;
-  }
-
-  /**
-   * Extracts file path from URI and validates it
-   * 
-   * @private
-   * @param {object} item - Object containing name and optional uri property
-   * @param {string} item.name - Name identifier for the item
-   * @param {string} [item.uri] - URI to extract file path from
-   * @returns {string} File path without 'file://' prefix
-   * @throws {string} Error message if URI is missing or invalid
-   */
-  private setFilePath(item: { name: string, uri?: string }): string {
-    if (!item.uri) {
-      return `Invalid '${item.name}' item: missing URI`;
-    }
-    return item.uri.replace('file://', '');
-  }
-
-  /**
-   * Validates required arguments for tool handler methods
-   * 
-   * @private
-   * @param {unknown} args - Tool arguments to validate
-   * @param {string[]} fields - Required field names
-   * @returns {string | null} Error message if validation fails, null if all required fields are present
-   */
-  private validate(args: unknown, fields: string[]): string | null {
-    const type: Record<string, z.ZodType> = {};
-    for (const field of fields) {
-      if (field === 'query') {
-        type[field] = z.string();
-      } else {
-        type[field] = z.union([
-          z.number(),
-          z.record(z.string(), z.unknown()).refine((obj) => Object.keys(obj).length > 0),
-          z.string().min(1)
-        ]);
+  getCodeResolves(): Tool {
+    return {
+      name: 'get_code_resolves',
+      description: 'Resolve additional details for a code action item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the code action was obtained' },
+          item: { type: 'object', description: 'Code action item from get_code_actions tool' }
+        },
+        required: ['file_path', 'item']
       }
-    }
-    const schema = z.object(type);
-    const result = schema.safeParse(args);
-    if (!result.success) {
-      const missing = result.error.issues.map(issue => issue.path[0]);
-      return `Missing required arguments: ${missing.join(', ')}`;
-    }
-    return null;
+    };
+  }
+
+  /**
+   * Tool definition for getting document colors
+   * 
+   * @returns {Tool} Document colors tool
+   */
+  getColors(): Tool {
+    return {
+      name: 'get_colors',
+      description: 'Extract color definitions and references from document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting code completions
+   * 
+   * @returns {Tool} Code completions tool
+   */
+  getCompletions(): Tool {
+    return {
+      name: 'get_completions',
+      description: 'Get completions and auto-suggestions at cursor position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting folding ranges
+   * 
+   * @returns {Tool} Folding ranges tool
+   */
+  getFoldingRanges(): Tool {
+    return {
+      name: 'get_folding_ranges',
+      description: 'Identify collapsible code sections for code editor folding',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting format
+   * 
+   * @returns {Tool} Format tool
+   */
+  getFormat(): Tool {
+    return {
+      name: 'get_format',
+      description: 'Format entire document using language server rules',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting highlights
+   * 
+   * @returns {Tool} Highlights tool
+   */
+  getHighlights(): Tool {
+    return {
+      name: 'get_highlights',
+      description: 'Highlight all occurrences of symbol at cursor position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting hover information
+   * 
+   * @returns {Tool} Hover information tool
+   */
+  getHover(): Tool {
+    return {
+      name: 'get_hover',
+      description: 'Show type information and documentation at cursor position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting implementations
+   * 
+   * @returns {Tool} Implementations tool
+   */
+  getImplementations(): Tool {
+    return {
+      name: 'get_implementations',
+      description: 'Find all locations where interface or abstract method is implemented',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting incoming calls
+   * 
+   * @returns {Tool} Get incoming calls tool
+   */
+  getIncomingCalls(): Tool {
+    return {
+      name: 'get_incoming_calls',
+      description: 'Show all functions that call this symbol',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy tool' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting inlay hint details
+   * 
+   * @returns {Tool} Inlay hint details tool
+   */
+  getInlayHint(): Tool {
+    return {
+      name: 'get_inlay_hint',
+      description: 'Resolve additional details for an inlay hint item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the inlay hint was obtained' },
+          item: { type: 'object', description: 'Inlay hint item from get_inlay_hints tool' }
+        },
+        required: ['file_path', 'item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting inlay hints
+   * 
+   * @returns {Tool} Inlay hints tool
+   */
+  getInlayHints(): Tool {
+    return {
+      name: 'get_inlay_hints',
+      description: 'Show inline type annotations and parameter hints in code range',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting linked editing range
+   * 
+   * @returns {Tool} Linked editing range tool
+   */
+  getLinkedEditingRange(): Tool {
+    return {
+      name: 'get_linked_editing_range',
+      description: 'Find related ranges that should be edited simultaneously',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for resolving document links
+   * 
+   * @returns {Tool} Document link resolve tool
+   */
+  getLinkResolves(): Tool {
+    return {
+      name: 'get_link_resolves',
+      description: 'Resolve target URL for a document link item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the document link was obtained' },
+          item: { type: 'object', description: 'Document link item from get_links tool' }
+        },
+        required: ['file_path', 'item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document links
+   * 
+   * @returns {Tool} Document links tool
+   */
+  getLinks(): Tool {
+    return {
+      name: 'get_links',
+      description: 'Extract clickable links and references from document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting outgoing calls
+   * 
+   * @returns {Tool} Get outgoing calls tool
+   */
+  getOutgoingCalls(): Tool {
+    return {
+      name: 'get_outgoing_calls',
+      description: 'Show all functions that this symbol calls',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Call hierarchy item from get_call_hierarchy tool' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for project files listing
+   * 
+   * @returns {Tool} Project files tool
+   */
+  getProjectFiles(): Tool {
+    return {
+      name: 'get_project_files',
+      description: 'List all files in the project workspace',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Project name to list files from' },
+          limit: { type: 'number', description: 'Pagination limit for number of files to return', default: this.limit },
+          offset: { type: 'number', description: 'Pagination offset for number of files to skip', default: 0 }
+        },
+        required: ['language_id', 'project']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for project symbol search
+   * 
+   * @returns {Tool} Project symbols tool
+   */
+  getProjectSymbols(): Tool {
+    return {
+      name: 'get_project_symbols',
+      description: 'Search for symbols across entire project workspace',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Project name to search within' },
+          query: { type: 'string', description: 'Symbol search query' },
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 },
+          timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
+        },
+        required: ['language_id', 'project', 'query']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting range format
+   * 
+   * @returns {Tool} Range format tool
+   */
+  getRangeFormat(): Tool {
+    return {
+      name: 'get_range_format',
+      description: 'Format specific code range using language server rules',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          end_character: { type: 'number', description: 'End character position (zero-based)' },
+          end_line: { type: 'number', description: 'End line number (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          start_character: { type: 'number', description: 'Start character position (zero-based)' },
+          start_line: { type: 'number', description: 'Start line number (zero-based)' }
+        },
+        required: ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for resolving completion items
+   * 
+   * @returns {Tool} Completion resolve tool
+   */
+  getResolves(): Tool {
+    return {
+      name: 'get_resolves',
+      description: 'Resolve additional details for a completion item',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file where the completion was obtained' },
+          item: { type: 'object', description: 'Completion item from get_completions tool' }
+        },
+        required: ['file_path', 'item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting selection range
+   * 
+   * @returns {Tool} Selection range tool
+   */
+  getSelectionRange(): Tool {
+    return {
+      name: 'get_selection_range',
+      description: 'Expand selection to logical code boundaries',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting semantic tokens
+   * 
+   * @returns {Tool} Semantic tokens tool
+   */
+  getSemanticTokens(): Tool {
+    return {
+      name: 'get_semantic_tokens',
+      description: 'Extract detailed syntax tokens for advanced highlighting and analysis',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting server capabilities
+   * 
+   * @returns {Tool} Server capabilities tool
+   */
+  getServerCapabilities(): Tool {
+    return {
+      name: 'get_server_capabilities',
+      description: 'Get language server capabilities and tool mappings',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting server projects
+   * 
+   * @returns {Tool} Server projects tool
+   */
+  getServerProjects(): Tool {
+    return {
+      name: 'get_server_projects',
+      description: 'List available projects for a language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting language server status
+   * 
+   * @returns {Tool} Server status tool
+   */
+  getServerStatus(): Tool {
+    return {
+      name: 'get_server_status',
+      description: 'Check running status of language servers',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Optional language identifier' }
+        },
+        required: []
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting signature help
+   * 
+   * @returns {Tool} Signature help tool
+   */
+  getSignature(): Tool {
+    return {
+      name: 'get_signature',
+      description: 'Show function parameters and signature help at cursor position',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting subtypes
+   * 
+   * @returns {Tool} Get subtypes tool
+   */
+  getSubtypes(): Tool {
+    return {
+      name: 'get_subtypes',
+      description: 'Find all subtypes that inherit from this type',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy tool' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting supertypes
+   * 
+   * @returns {Tool} Get supertypes tool
+   */
+  getSupertypes(): Tool {
+    return {
+      name: 'get_supertypes',
+      description: 'Find all parent types that this type inherits from',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          item: { type: 'object', description: 'Type hierarchy item from get_type_hierarchy tool' }
+        },
+        required: ['item']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting symbol definitions
+   * 
+   * @returns {Tool} Symbol definitions tool
+   */
+  getSymbolDefinitions(): Tool {
+    return {
+      name: 'get_symbol_definitions',
+      description: 'Navigate to where symbol is originally defined',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting symbol references
+   * 
+   * @returns {Tool} Symbol references tool
+   */
+  getSymbolReferences(): Tool {
+    return {
+      name: 'get_symbol_references',
+      description: 'Find all locations where symbol is used or referenced',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          include_declaration: { type: 'boolean', description: 'Include declaration in results', default: true }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting symbol renames
+   * 
+   * @returns {Tool} Symbol renames tool
+   */
+  getSymbolRenames(): Tool {
+    return {
+      name: 'get_symbol_renames',
+      description: 'Preview all locations that would be renamed with symbol',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          new_name: { type: 'string', description: 'New name for the symbol' }
+        },
+        required: ['character', 'file_path', 'line', 'new_name']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting document symbols
+   * 
+   * @returns {Tool} Document symbols tool
+   */
+  getSymbols(): Tool {
+    return {
+      name: 'get_symbols',
+      description: 'List all symbols in document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' },
+          limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
+          offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting type definitions
+   * 
+   * @returns {Tool} Type definitions tool
+   */
+  getTypeDefinitions(): Tool {
+    return {
+      name: 'get_type_definitions',
+      description: 'Navigate to where symbol type is defined',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for getting type hierarchy
+   * 
+   * @returns {Tool} Get type hierarchy tool
+   */
+  getTypeHierarchy(): Tool {
+    return {
+      name: 'get_type_hierarchy',
+      description: 'Build type hierarchy showing inheritance relationships',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          character: { type: 'number', description: 'Character position (zero-based)' },
+          file_path: { type: 'string', description: 'Path to the project file' },
+          line: { type: 'number', description: 'Line number (zero-based)' }
+        },
+        required: ['character', 'file_path', 'line']
+      }
+    };
+  }
+
+  /**
+   * Returns all available MCP tools
+   * 
+   * @returns {Tool[]} Array of MCP tool definitions
+   */
+  getTools(): Tool[] {
+    return [
+      this.getCallHierarchy(),
+      this.getCodeActions(),
+      this.getCodeResolves(),
+      this.getColors(),
+      this.getCompletions(),
+      this.getFoldingRanges(),
+      this.getFormat(),
+      this.getHighlights(),
+      this.getHover(),
+      this.getImplementations(),
+      this.getIncomingCalls(),
+      this.getInlayHint(),
+      this.getInlayHints(),
+      this.getLinkedEditingRange(),
+      this.getLinkResolves(),
+      this.getLinks(),
+      this.getOutgoingCalls(),
+      this.getProjectFiles(),
+      this.getProjectSymbols(),
+      this.getRangeFormat(),
+      this.getResolves(),
+      this.getSelectionRange(),
+      this.getSemanticTokens(),
+      this.getServerCapabilities(),
+      this.getServerProjects(),
+      this.getServerStatus(),
+      this.getSignature(),
+      this.getSubtypes(),
+      this.getSupertypes(),
+      this.getSymbolDefinitions(),
+      this.getSymbolReferences(),
+      this.getSymbolRenames(),
+      this.getSymbols(),
+      this.getTypeDefinitions(),
+      this.getTypeHierarchy(),
+      this.loadProjectFiles(),
+      this.restartServer(),
+      this.startServer(),
+      this.stopServer()
+    ];
+  }
+
+  /**
+   * Tool definition for loading project files
+   * 
+   * @returns {Tool} Load project files tool
+   */
+  loadProjectFiles(): Tool {
+    return {
+      name: 'load_project_files',
+      description: 'Load all project files into language server for full workspace analysis',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Project name to load all project files from' },
+          timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
+        },
+        required: ['language_id', 'project']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for restarting language servers
+   * 
+   * @returns {Tool} Restart server tool
+   */
+  restartServer(): Tool {
+    return {
+      name: 'restart_server',
+      description: 'Restart language server with optional project selection',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Project name to load' }
+        },
+        required: ['language_id', 'project']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for starting language servers
+   * 
+   * @returns {Tool} Start server tool
+   */
+  startServer(): Tool {
+    return {
+      name: 'start_server',
+      description: 'Start language server with project selection',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' },
+          project: { type: 'string', description: 'Optional project name to load (default: first server language project)' }
+        },
+        required: ['language_id']
+      }
+    };
+  }
+
+  /**
+   * Tool definition for stopping language servers
+   * 
+   * @returns {Tool} Stop server tool
+   */
+  stopServer(): Tool {
+    return {
+      name: 'stop_server',
+      description: 'Stop running language server',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          language_id: { type: 'string', description: 'Language identifier' }
+        },
+        required: ['language_id']
+      }
+    };
   }
 }
