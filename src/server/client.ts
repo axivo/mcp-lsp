@@ -69,6 +69,11 @@ import {
 } from 'vscode-languageserver-protocol';
 import { Config, ProjectConfig } from './config.js';
 
+export type Response = {
+  content: Array<{ type: 'text'; text: string }>;
+  data?: unknown;
+};
+
 interface ServerConnection {
   capabilities?: ServerCapabilities;
   connection: MessageConnection;
@@ -76,11 +81,6 @@ interface ServerConnection {
   name: string;
   process: ChildProcess;
 }
-
-export type ServerResponse = {
-  content: Array<{ type: 'text'; text: string }>;
-  data?: unknown;
-};
 
 /**
  * LSP Process Manager and Communication Client
@@ -332,9 +332,9 @@ export class Client {
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name
    * @param {string} filePath - File path to open
-   * @returns {Promise<ServerResponse | null>} Promise that resolves with error response or null on success
+   * @returns {Promise<Response | null>} Promise that resolves with error response or null on success
    */
-  private async openFile(languageId: string, project: string, filePath: string): Promise<ServerResponse | null> {
+  private async openFile(languageId: string, project: string, filePath: string): Promise<Response | null> {
     const uri = pathToFileURL(filePath).toString();
     let openedSet = this.openedFiles.get(project);
     if (!openedSet) {
@@ -673,9 +673,9 @@ export class Client {
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name to load
    * @param {number} timeout - Optional timeout in milliseconds
-   * @returns {Promise<ServerResponse>} Promise that resolves with standardized response
+   * @returns {Promise<Response>} Promise that resolves with standardized response
    */
-  async loadProjectFiles(languageId: string, project: string, timeout?: number): Promise<ServerResponse> {
+  async loadProjectFiles(languageId: string, project: string, timeout?: number): Promise<Response> {
     const timer = Date.now();
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
@@ -740,11 +740,11 @@ export class Client {
    * @param {unknown} message - The response message from language server
    * @param {boolean} stringify - Whether to JSON stringify the response (default: false)
    * @param {unknown} data - The structured content data from language server
-   * @returns {ServerResponse} Standardized response format
+   * @returns {Response} Standardized response format
    */
-  response(message: unknown, stringify: boolean = false, data?: unknown): ServerResponse {
+  response(message: unknown, stringify: boolean = false, data?: unknown): Response {
     const text = typeof message === 'string' && !stringify ? message : JSON.stringify(message);
-    const result: ServerResponse = { content: [{ type: 'text', text }] };
+    const result: Response = { content: [{ type: 'text', text }] };
     if (data) {
       result.data = data;
     }
@@ -756,9 +756,9 @@ export class Client {
    * 
    * @param {string} languageId - Language identifier
    * @param {string} project - Project name to start after stopping
-   * @returns {Promise<ServerResponse>} Promise that resolves with restart result
+   * @returns {Promise<Response>} Promise that resolves with restart result
    */
-  async restartServer(languageId: string, project: string): Promise<ServerResponse> {
+  async restartServer(languageId: string, project: string): Promise<Response> {
     if (!this.config.hasServerConfig(languageId)) {
       return this.response(`Language server '${languageId}' is not configured.`);
     }
@@ -915,9 +915,9 @@ export class Client {
    * 
    * @param {string} languageId - Language identifier
    * @param {string} project - Optional project name to start, defaults to first project
-   * @returns {Promise<ServerResponse>} Promise that resolves when server is started
+   * @returns {Promise<Response>} Promise that resolves when server is started
    */
-  async startServer(languageId: string, project?: string): Promise<ServerResponse> {
+  async startServer(languageId: string, project?: string): Promise<Response> {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);

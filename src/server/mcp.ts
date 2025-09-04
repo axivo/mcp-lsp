@@ -70,7 +70,7 @@ import {
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { z } from 'zod';
-import { Client, ServerResponse } from './client.js';
+import { Client, Response } from './client.js';
 import { Config } from './config.js';
 import { McpTool } from './tool.js';
 
@@ -1061,9 +1061,9 @@ export class McpServer {
    * 
    * @private
    * @param {CallToolRequest} request - The tool execution request
-   * @returns {Promise<unknown>} Response containing tool execution results
+   * @returns {Promise<Response>} Response containing tool execution results
    */
-  private async handleRequest(request: CallToolRequest): Promise<ServerResponse> {
+  private async handleRequest(request: CallToolRequest): Promise<Response> {
     if (!request.params.arguments) {
       return this.client.response('No arguments provided');
     }
