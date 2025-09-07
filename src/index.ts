@@ -10,15 +10,28 @@
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { McpServer } from './server/mcp.js';
 
+/**
+ * Error interface for Node.js errors with error codes
+ * 
+ * Extends standard Error interface to include Node.js-specific error codes
+ * for precise error classification and handling.
+ * 
+ * @interface CodeError
+ * @property {string} code - Node.js error code identifier (e.g., 'EPIPE', 'ENOENT')
+ */
 interface CodeError {
   code: string;
 }
 
 /**
- * Check if an error is an EPIPE error that should be ignored
+ * Checks if an error is an EPIPE error that should be handled gracefully
  * 
- * @param {unknown} err - The error to check
- * @returns {boolean} True if this is an EPIPE error, false otherwise
+ * EPIPE (Broken Pipe) errors occur when the client disconnects unexpectedly
+ * and are normal for MCP server operations. This function identifies such errors
+ * to prevent unnecessary process termination.
+ * 
+ * @param {unknown} err - Error object to classify and check
+ * @returns {boolean} True if error is EPIPE and should be ignored, false for other errors requiring handling
  */
 function isEpipeError(err: unknown): boolean {
   if (!(err instanceof Error)) {
@@ -31,14 +44,24 @@ function isEpipeError(err: unknown): boolean {
 }
 
 /**
- * Main entry point for the LSP MCP Server
+ * Main entry point for the LSP-MCP Server with comprehensive error handling
  * 
- * Validates environment variables, initializes the LspMcpServer,
- * and establishes stdio transport for communication with Claude agents.
+ * Initializes the language server protocol bridge for Model Context Protocol,
+ * validates required environment configuration, establishes stdio communication
+ * transport, and configures robust error handling for production deployment.
+ * 
+ * Environment Requirements:
+ * - LSP_FILE_PATH: Absolute path to LSP server configuration JSON file
+ * 
+ * Error Handling:
+ * - EPIPE errors are logged but don't terminate the process (normal client disconnection)
+ * - Other uncaught exceptions terminate the process after logging
+ * - Configuration errors exit with code 1
  * 
  * @async
  * @function main
- * @throws {Error} When required environment variables are missing or server initialization fails
+ * @throws {Error} When LSP_FILE_PATH is missing or server initialization fails
+ * @returns {Promise<void>} Promise that resolves when server is connected and listening
  */
 async function main(): Promise<void> {
   process.on('uncaughtException', (error) => {

@@ -1,5 +1,5 @@
 /**
- * Communication Client
+ * Process Manager and Communication Client
  * 
  * @module server/client
  * @author AXIVO
@@ -69,11 +69,28 @@ import {
 } from 'vscode-languageserver-protocol';
 import { Config, ProjectConfig } from './config.js';
 
+/**
+ * Standardized response format for MCP tool execution
+ * 
+ * @interface Response
+ * @property {Array<{type: 'text', text: string}>} content - Response content array with text type
+ * @property {unknown} [data] - Optional structured data payload
+ */
 export type Response = {
   content: Array<{ type: 'text'; text: string }>;
   data?: unknown;
 };
 
+/**
+ * Language server connection state and metadata
+ * 
+ * @interface ServerConnection
+ * @property {ServerCapabilities} [capabilities] - LSP server capabilities after initialization
+ * @property {MessageConnection} connection - JSON-RPC message connection
+ * @property {boolean} initialized - Whether server completed initialization sequence
+ * @property {string} name - Project name associated with this server connection
+ * @property {ChildProcess} process - Node.js child process running the language server
+ */
 interface ServerConnection {
   capabilities?: ServerCapabilities;
   connection: MessageConnection;
@@ -83,7 +100,7 @@ interface ServerConnection {
 }
 
 /**
- * LSP Process Manager and Communication Client
+ * Process Manager and Communication Client
  * 
  * Provides LSP server process management, JSON-RPC communication,
  * and file synchronization with proper lifecycle management.
@@ -115,12 +132,14 @@ export class Client {
   }
 
   /**
-   * Checks and enforces rate limiting per language
+   * Checks and enforces rate limiting per language server
+   * 
+   * Uses sliding window rate limiting based on server configuration.
+   * Cleans up expired rate limit entries automatically.
    * 
    * @private
    * @param {string} languageId - Language identifier
-   * @returns {boolean} True if within rate limit
-   * @throws {Error} When rate limit is exceeded
+   * @returns {boolean} True if within rate limit, false if limit exceeded
    */
   private checkRateLimit(languageId: string): boolean {
     const serverConfig = this.config.getServerConfig(languageId);
@@ -140,12 +159,15 @@ export class Client {
   }
 
   /**
-   * Creates a message connection for an language server process
+   * Creates a JSON-RPC message connection for a language server process
+   * 
+   * Sets up bidirectional communication using stdio streams and configures
+   * request handlers based on server settings (configuration, messages, registration).
    * 
    * @private
-   * @param {string} languageId - Language identifier
-   * @param {ChildProcess} process - Language server process
-   * @returns {MessageConnection} Message connection
+   * @param {string} languageId - Language identifier for configuration lookup
+   * @param {ChildProcess} process - Language server child process with stdio pipes
+   * @returns {MessageConnection} Configured JSON-RPC message connection
    */
   private createConnection(languageId: string, process: ChildProcess): MessageConnection {
     const connection = createMessageConnection(
@@ -179,14 +201,17 @@ export class Client {
   }
 
   /**
-  * Finds all files with specified extensions
-  * 
-  * @private
-  * @param {string} cwd - Directory to search
-  * @param {string[]} extensions - File extensions
-  * @param {object} patterns - Pattern configuration with exclude and include arrays
-  * @returns {Promise<string[]>} Array of matching file paths
-  */
+   * Finds all files with specified extensions using fast-glob
+   * 
+   * Excludes common build/dependency directories by default.
+   * Supports custom include/exclude patterns from project configuration.
+   * 
+   * @private
+   * @param {string} cwd - Directory to search from
+   * @param {string[]} extensions - File extensions to match (e.g., ['.ts', '.js'])
+   * @param {ProjectConfig['patterns']} [patterns] - Optional include/exclude pattern configuration
+   * @returns {Promise<string[]>} Array of absolute file paths matching criteria
+   */
   private async findFiles(cwd: string, extensions: string[], patterns: ProjectConfig['patterns'] = {}): Promise<string[]> {
     if (extensions.length === 0) {
       return [];
@@ -214,11 +239,15 @@ export class Client {
   }
 
   /**
-   * Gets server information for a specific file path
+   * Gets server information for a specific file path using caching and extension matching
+   * 
+   * Converts relative paths to absolute, checks cache first for performance,
+   * then searches through running servers to find project ownership based on
+   * path prefixes and file extension compatibility.
    * 
    * @private
-   * @param {string} filePath - Path to the file
-   * @returns {string | null} Project name of the running server that handles the file, or null if not found
+   * @param {string} filePath - Absolute or relative path to the file
+   * @returns {string | null} Project name of the running server that handles the file, or null if no match
    */
   private getServerInfo(filePath: string): string | null {
     const absolutePath = isAbsolute(filePath) ? filePath : join(process.cwd(), filePath);
@@ -247,12 +276,15 @@ export class Client {
   }
 
   /**
-   * Initializes project by setting up workspace indexing using VSCode protocol
+   * Initializes project workspace by configuring workspace folders
+   * 
+   * Sends DidChangeWorkspaceFoldersNotification to inform language server
+   * about workspace structure. Prevents duplicate initialization using cache.
    * 
    * @private
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @returns {Promise<void>} Promise that resolves when project is initialized
+   * @param {string} languageId - Language identifier for server configuration lookup
+   * @param {string} project - Project name to initialize workspace for
+   * @returns {Promise<void>} Promise that resolves when workspace folders are configured
    */
   private async initializeProject(languageId: string, project: string): Promise<void> {
     if (this.initializedProjects.has(project)) {
@@ -274,12 +306,16 @@ export class Client {
   }
 
   /**
-   * Initializes an language server with the initialize request
+   * Initializes language server using LSP initialization protocol
+   * 
+   * Sends InitializeRequest with client capabilities, workspace folders, and configuration.
+   * Establishes server capabilities, opens initial file for indexing, and validates
+   * server readiness through workspace symbol query or configuration-based check.
    * 
    * @private
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @returns {Promise<void>} Promise that resolves when initialized
+   * @param {string} languageId - Language identifier for configuration and capability setup
+   * @param {string} project - Project name for workspace and connection management
+   * @returns {Promise<void>} Promise that resolves when LSP initialization sequence completes
    */
   private async initializeServer(languageId: string, project: string): Promise<void> {
     const serverConnection = this.connections.get(project)!;
@@ -326,13 +362,16 @@ export class Client {
   }
 
   /**
-   * Opens a single file in the language server
+   * Opens a single file in the language server using DidOpenTextDocument notification
+   * 
+   * Converts file path to URI, reads file content, and tracks opened files per project.
+   * Skips files already opened to avoid duplicate notifications.
    * 
    * @private
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @param {string} filePath - File path to open
-   * @returns {Promise<Response | null>} Promise that resolves with error response or null on success
+   * @param {string} languageId - Language identifier for TextDocumentItem creation
+   * @param {string} project - Project name for file tracking and connection lookup
+   * @param {string} filePath - Absolute file path to read and open
+   * @returns {Promise<Response | null>} Error response if file read fails, null on successful open
    */
   private async openFile(languageId: string, project: string, filePath: string): Promise<Response | null> {
     const uri = pathToFileURL(filePath).toString();
@@ -364,14 +403,18 @@ export class Client {
   }
 
   /**
-   * Opens multiple files in the language server
+   * Opens multiple files in the language server with concurrency control
+   * 
+   * Uses p-limit for controlled concurrency based on server settings.
+   * Implements timeout handling with fallback to first 10 files on timeout.
    * 
    * @private
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @param {string[]} files - File paths to open
-   * @param {number} [timeout] - Optional timeout in milliseconds 
-   * @returns {Promise<void>} Promise that resolves when all files are opened
+   * @param {string} languageId - Language identifier for configuration lookup
+   * @param {string} project - Project name for file tracking
+   * @param {string[]} files - Array of absolute file paths to open
+   * @param {number} [timeout] - Optional timeout in milliseconds for operation
+   * @returns {Promise<void>} Promise that resolves when all files are opened or timeout occurs
+   * @throws {Error} When timeout occurs during file loading
    */
   private async openFiles(languageId: string, project: string, files: string[], timeout?: number): Promise<void> {
     if (files.length === 0) {
@@ -407,12 +450,16 @@ export class Client {
   }
 
   /**
-  * Sets client capabilities for LSP features
-  * 
-  * @private
-  * @param {string} languageId - Language identifier for server-specific capabilities
-  * @returns {ClientCapabilities} Client capabilities
-  */
+   * Sets comprehensive LSP client capabilities for initialization
+   * 
+   * Configures support for all major LSP features including completion,
+   * hover, definition, references, formatting, and workspace operations.
+   * Merges with server-specific capability overrides from configuration.
+   * 
+   * @private
+   * @param {string} languageId - Language identifier for server-specific capability overrides
+   * @returns {ClientCapabilities} Complete LSP client capabilities object
+   */
   private setClientCapabilities(languageId: string): ClientCapabilities {
     const capabilities: ClientCapabilities = {
       general: { positionEncodings: ['utf-8', 'utf-16'] },
@@ -496,13 +543,17 @@ export class Client {
   }
 
   /**
-   * Sets files cache for a specific project
+   * Sets files cache for a specific project using glob pattern matching
+   * 
+   * Discovers all files matching configured extensions within project path,
+   * populates language ID cache for file-to-project mapping, and stores
+   * file lists for efficient project file management.
    * 
    * @private
-   * @param {string} project - Project name
-   * @param {ProjectConfig} projectConfig - Project configuration object
-   * @param {string[]} extensions - File extensions
-   * @returns {Promise<void>} Promise that resolves when files are cached
+   * @param {string} project - Project name for cache key
+   * @param {ProjectConfig} projectConfig - Project configuration with path and patterns
+   * @param {string[]} extensions - File extensions to match during discovery
+   * @returns {Promise<void>} Promise that resolves when file discovery and caching complete
    */
   private async setFilesCache(project: string, projectConfig: ProjectConfig, extensions: string[]): Promise<void> {
     let cachedFiles = this.projectFiles.get(project);
@@ -520,11 +571,15 @@ export class Client {
   }
 
   /**
-   * Sets process event handlers for a language server
+   * Sets process event handlers for language server lifecycle management
+   * 
+   * Configures cleanup handlers for process termination that remove project mappings,
+   * clear file caches, close connections, and clean up tracking data structures
+   * to prevent memory leaks and stale references.
    * 
    * @private
-   * @param {string} project - Project name
-   * @param {ChildProcess} process - Language server process
+   * @param {string} project - Project name for cleanup scope identification
+   * @param {ChildProcess} process - Language server process to monitor for lifecycle events
    */
   private setProcessHandlers(project: string, process: ChildProcess): void {
     const cleanup = () => {
@@ -668,12 +723,15 @@ export class Client {
   }
 
   /**
-   * Loads files for a specific project into the language server
+   * Loads all project files into the language server for workspace analysis
+   * 
+   * Opens all cached project files that haven't been opened yet.
+   * Supports optional timeout with fallback behavior for large projects.
    * 
    * @param {string} languageId - Language identifier
-   * @param {string} project - Project name to load
-   * @param {number} timeout - Optional timeout in milliseconds
-   * @returns {Promise<Response>} Promise that resolves with standardized response
+   * @param {string} project - Project name to load files for
+   * @param {number} [timeout] - Optional timeout in milliseconds for file loading
+   * @returns {Promise<Response>} Standardized response with loading results and timing
    */
   async loadProjectFiles(languageId: string, project: string, timeout?: number): Promise<Response> {
     const timer = Date.now();
@@ -735,12 +793,15 @@ export class Client {
   }
 
   /**
-   * Creates a standardized response for tool execution
+   * Creates a standardized MCP response format
    * 
-   * @param {unknown} message - The response message from language server
-   * @param {boolean} stringify - Whether to JSON stringify the response (default: false)
-   * @param {unknown} data - The structured content data from language server
-   * @returns {Response} Standardized response format
+   * Converts language server responses into the MCP-compliant format
+   * with optional structured data payload.
+   * 
+   * @param {unknown} message - Response message (string or object)
+   * @param {boolean} [stringify=false] - Whether to JSON stringify non-string messages
+   * @param {unknown} [data] - Optional structured data to include in response
+   * @returns {Response} MCP-compliant response with content array and optional data
    */
   response(message: unknown, stringify: boolean = false, data?: unknown): Response {
     const text = typeof message === 'string' && !stringify ? message : JSON.stringify(message);
@@ -793,11 +854,14 @@ export class Client {
   }
 
   /**
-   * Sends a typed JSON-RPC notification to an language server
+   * Sends a typed JSON-RPC notification to a language server
    * 
-   * @param {string} project - Project name
-   * @param {string} method - Method name from typed notification
-   * @param {unknown} params - Method parameters
+   * Sends fire-and-forget notifications that don't expect responses.
+   * Validates connection state before attempting to send.
+   * 
+   * @param {string} project - Project name for connection lookup
+   * @param {string} method - LSP method name (e.g., 'textDocument/didOpen')
+   * @param {unknown} params - Method-specific parameters matching LSP specification
    */
   sendNotification(project: string, method: string, params: unknown): void {
     const serverConnection = this.connections.get(project);
@@ -808,13 +872,16 @@ export class Client {
   }
 
   /**
-   * Sends a typed JSON-RPC request to an language server
+   * Sends a typed JSON-RPC request to a language server with rate limiting
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @param {string} method - Method name from typed request
-   * @param {unknown} params - Method parameters
-   * @returns {Promise<unknown>} Promise that resolves with the response
+   * Enforces rate limits, validates connection state, handles workspace initialization
+   * for workspace symbol requests, and provides standardized error responses.
+   * 
+   * @param {string} languageId - Language identifier for rate limiting and configuration
+   * @param {string} project - Project name for connection and workspace management
+   * @param {string} method - LSP method name (e.g., 'textDocument/completion')
+   * @param {unknown} params - Method-specific parameters matching LSP specification
+   * @returns {Promise<unknown>} LSP response data or standardized error response
    */
   async sendRequest(languageId: string, project: string, method: string, params: unknown): Promise<unknown> {
     if (!this.checkRateLimit(languageId)) {
@@ -835,12 +902,16 @@ export class Client {
   }
 
   /**
-   * Sends a file request to the appropriate language server
+   * Sends a file-specific request to the appropriate language server
    * 
-   * @param {string} file - Path to the file
-   * @param {string} method - Method name from typed request
-   * @param {unknown} params - Method parameters
-   * @returns {Promise<unknown>} Promise that resolves with the response
+   * Determines which language server handles the file, opens all project files
+   * for document-level requests to ensure proper indexing, then routes the
+   * request to the correct server connection.
+   * 
+   * @param {string} file - Absolute or relative path to the target file
+   * @param {string} method - LSP method name (e.g., 'textDocument/hover')
+   * @param {unknown} params - Method-specific parameters with file URI
+   * @returns {Promise<unknown>} LSP response data or error message string
    */
   async sendServerRequest(file: string, method: string, params: unknown): Promise<unknown> {
     const project = this.getServerInfo(file);
@@ -899,9 +970,12 @@ export class Client {
   }
 
   /**
-   * Gracefully shuts down all language servers
+   * Gracefully shuts down all running language servers
    * 
-   * @returns {Promise<void>} Promise that resolves when all servers are stopped
+   * Stops all server connections concurrently, allowing each to complete
+   * its shutdown sequence including LSP shutdown requests and process cleanup.
+   * 
+   * @returns {Promise<void>} Promise that resolves when all server shutdowns complete or fail
    */
   async shutdown(): Promise<void> {
     const shutdown = Array.from(this.connections.keys()).map(project => {
@@ -911,11 +985,15 @@ export class Client {
   }
 
   /**
-   * Starts a language server for a specific language
+   * Starts a language server process for a specific language and project
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Optional project name to start, defaults to first project
-   * @returns {Promise<Response>} Promise that resolves when server is started
+   * Spawns child process, creates JSON-RPC connection, initializes LSP protocol,
+   * sets up file caching, and configures process lifecycle handlers.
+   * Prevents duplicate server instances for the same language.
+   * 
+   * @param {string} languageId - Language identifier for server configuration lookup
+   * @param {string} [project] - Optional project name to start, defaults to first configured project
+   * @returns {Promise<Response>} Standardized response with server startup details and timing
    */
   async startServer(languageId: string, project?: string): Promise<Response> {
     const serverConfig = this.config.getServerConfig(languageId);
@@ -966,10 +1044,14 @@ export class Client {
   }
 
   /**
-   * Stops a specific language server process
+   * Stops a specific language server process using graceful shutdown sequence
    * 
-   * @param {string} project - Project name
-   * @returns {Promise<void>} Promise that resolves when server is stopped
+   * Sends LSP shutdown request, waits for grace period, sends exit notification,
+   * disposes connection, terminates process with SIGTERM then SIGKILL if needed,
+   * and cleans up all associated tracking data.
+   * 
+   * @param {string} project - Project name identifying the server connection to stop
+   * @returns {Promise<void>} Promise that resolves when complete shutdown and cleanup finish
    */
   async stopServer(project: string): Promise<void> {
     const serverConnection = this.connections.get(project);
@@ -1017,10 +1099,12 @@ export class Client {
   }
 
   /**
-   * Gets package version
+   * Gets package version from package.json
    * 
-   * @returns {string} Package version
-   * @throws {Error} When package.json cannot be read or parsed
+   * Reads version from package.json relative to current module location.
+   * Returns error message string if reading fails rather than throwing.
+   * 
+   * @returns {string} Package version string or error message
    */
   version(): string {
     try {

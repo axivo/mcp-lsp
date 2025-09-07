@@ -9,9 +9,10 @@
 import { Tool } from '@modelcontextprotocol/sdk/types.js';
 
 /**
- * MCP Tool Definitions
+ * MCP Tool Definitions for Language Server Protocol Integration
  * 
- * Provides tool definitions for LSP operations exposed through the MCP protocol
+ * Provides comprehensive MCP tool definitions that bridge LSP server capabilities
+ * with Model Context Protocol, enabling Claude agents to interact with language servers.
  * 
  * @class McpTool
  */
@@ -19,18 +20,24 @@ export class McpTool {
   private limit: number;
 
   /**
-   * Creates a new McpTool instance
+   * Creates a new McpTool instance with pagination configuration
    * 
-   * @param {number} limit - Pagination limit for tool results
+   * Initializes tool definitions with consistent pagination limits
+   * for all tools that support result pagination.
+   * 
+   * @param {number} limit - Default pagination limit for paginated tool results
    */
   constructor(limit: number) {
     this.limit = limit;
   }
 
   /**
-   * Tool definition for getting call hierarchy
+   * Creates MCP tool for call hierarchy preparation
    * 
-   * @returns {Tool} Get call hierarchy tool
+   * Enables exploration of caller and callee relationships for functions and methods,
+   * supporting code navigation and dependency analysis.
+   * 
+   * @returns {Tool} MCP tool definition for call hierarchy analysis
    */
   getCallHierarchy(): Tool {
     return {
@@ -49,9 +56,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting code actions
+   * Creates MCP tool for code actions and quick fixes
    * 
-   * @returns {Tool} Code actions tool
+   * Provides access to automated refactoring suggestions, error corrections,
+   * and code improvement recommendations from language servers.
+   * 
+   * @returns {Tool} MCP tool definition for code action discovery
    */
   getCodeActions(): Tool {
     return {
@@ -70,9 +80,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for resolving code actions
+   * Creates MCP tool for resolving code action details
    * 
-   * @returns {Tool} Code action resolve tool
+   * Enables fetching complete information for code actions including
+   * workspace edits, commands, and additional context.
+   * 
+   * @returns {Tool} MCP tool definition for code action resolution
    */
   getCodeResolves(): Tool {
     return {
@@ -90,9 +103,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting document colors
+   * Creates MCP tool for document color extraction
    * 
-   * @returns {Tool} Document colors tool
+   * Identifies color values (hex, rgb, hsl) within documents for
+   * color picker integration and visual color management.
+   * 
+   * @returns {Tool} MCP tool definition for color detection
    */
   getColors(): Tool {
     return {
@@ -109,9 +125,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting code completions
+   * Creates MCP tool for code completions and IntelliSense
    * 
-   * @returns {Tool} Code completions tool
+   * Provides context-aware auto-completion suggestions including symbols,
+   * keywords, snippets, and documentation for enhanced coding productivity.
+   * 
+   * @returns {Tool} MCP tool definition for completion suggestions
    */
   getCompletions(): Tool {
     return {
@@ -130,9 +149,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting folding ranges
+   * Creates MCP tool for code folding range identification
    * 
-   * @returns {Tool} Folding ranges tool
+   * Analyzes document structure to find collapsible code sections like
+   * functions, classes, blocks, and comments for improved editor navigation.
+   * 
+   * @returns {Tool} MCP tool definition for folding range analysis
    */
   getFoldingRanges(): Tool {
     return {
@@ -149,9 +171,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting format
+   * Creates MCP tool for document formatting
    * 
-   * @returns {Tool} Format tool
+   * Applies consistent code formatting using language server style rules
+   * including indentation, spacing, and language-specific conventions.
+   * 
+   * @returns {Tool} MCP tool definition for document formatting
    */
   getFormat(): Tool {
     return {
@@ -168,9 +193,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting highlights
+   * Creates MCP tool for symbol highlighting
    * 
-   * @returns {Tool} Highlights tool
+   * Highlights all occurrences of the symbol under cursor for visual
+   * identification and quick navigation to related code locations.
+   * 
+   * @returns {Tool} MCP tool definition for symbol highlighting
    */
   getHighlights(): Tool {
     return {
@@ -189,9 +217,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting hover information
+   * Creates MCP tool for hover information and documentation
    * 
-   * @returns {Tool} Hover information tool
+   * Provides type information, documentation, and contextual details
+   * for symbols, functions, and variables at cursor position.
+   * 
+   * @returns {Tool} MCP tool definition for hover information
    */
   getHover(): Tool {
     return {
@@ -210,9 +241,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting implementations
+   * Creates MCP tool for implementation discovery
    * 
-   * @returns {Tool} Implementations tool
+   * Locates concrete implementations of interfaces, abstract methods,
+   * and virtual functions for navigation and analysis.
+   * 
+   * @returns {Tool} MCP tool definition for implementation search
    */
   getImplementations(): Tool {
     return {
@@ -231,9 +265,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting incoming calls
+   * Creates MCP tool for call hierarchy incoming calls analysis
    * 
-   * @returns {Tool} Get incoming calls tool
+   * Discovers all functions that call the specified symbol,
+   * enabling reverse dependency analysis and call graph exploration.
+   * 
+   * @returns {Tool} MCP tool definition for incoming call analysis
    */
   getIncomingCalls(): Tool {
     return {
@@ -250,9 +287,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting inlay hint details
+   * Creates MCP tool for resolving inlay hint details
    * 
-   * @returns {Tool} Inlay hint details tool
+   * Fetches complete information for inlay hints including tooltips,
+   * click actions, and extended documentation context.
+   * 
+   * @returns {Tool} MCP tool definition for inlay hint resolution
    */
   getInlayHint(): Tool {
     return {
@@ -270,9 +310,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting inlay hints
+   * Creates MCP tool for inline type annotations and parameter hints
    * 
-   * @returns {Tool} Inlay hints tool
+   * Provides visual type hints, parameter names, and return types
+   * within code ranges for improved readability and understanding.
+   * 
+   * @returns {Tool} MCP tool definition for inlay hint analysis
    */
   getInlayHints(): Tool {
     return {
@@ -293,9 +336,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting linked editing range
+   * Creates MCP tool for linked editing range discovery
    * 
-   * @returns {Tool} Linked editing range tool
+   * Identifies ranges that should be edited simultaneously, such as
+   * HTML tag pairs or variable declarations that need synchronized updates.
+   * 
+   * @returns {Tool} MCP tool definition for linked editing analysis
    */
   getLinkedEditingRange(): Tool {
     return {
@@ -314,9 +360,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for resolving document links
+   * Creates MCP tool for resolving document link targets
    * 
-   * @returns {Tool} Document link resolve tool
+   * Fetches actual target URLs for clickable links within documents,
+   * enabling navigation to external resources and file references.
+   * 
+   * @returns {Tool} MCP tool definition for document link resolution
    */
   getLinkResolves(): Tool {
     return {
@@ -334,9 +383,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting document links
+   * Creates MCP tool for document link extraction
    * 
-   * @returns {Tool} Document links tool
+   * Scans documents for URLs, file references, and other clickable links
+   * that can be navigated or opened in external applications.
+   * 
+   * @returns {Tool} MCP tool definition for link discovery
    */
   getLinks(): Tool {
     return {
@@ -353,9 +405,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting outgoing calls
+   * Creates MCP tool for call hierarchy outgoing calls analysis
    * 
-   * @returns {Tool} Get outgoing calls tool
+   * Discovers all functions called by the specified symbol,
+   * enabling dependency analysis and call graph exploration.
+   * 
+   * @returns {Tool} MCP tool definition for outgoing call analysis
    */
   getOutgoingCalls(): Tool {
     return {
@@ -372,9 +427,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for project files listing
+   * Creates MCP tool for project file listing with pagination
    * 
-   * @returns {Tool} Project files tool
+   * Lists all files in project workspace with pagination support
+   * for efficient browsing of large codebases.
+   * 
+   * @returns {Tool} MCP tool definition for project file enumeration
    */
   getProjectFiles(): Tool {
     return {
@@ -394,9 +452,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for project symbol search
+   * Creates MCP tool for project-wide symbol search with pagination
    * 
-   * @returns {Tool} Project symbols tool
+   * Enables comprehensive symbol discovery across entire workspace
+   * with query-based filtering and pagination for large result sets.
+   * 
+   * @returns {Tool} MCP tool definition for workspace symbol search
    */
   getProjectSymbols(): Tool {
     return {
@@ -418,9 +479,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting range format
+   * Creates MCP tool for range-specific code formatting
    * 
-   * @returns {Tool} Range format tool
+   * Applies formatting to selected text ranges while preserving
+   * surrounding code structure and maintaining style consistency.
+   * 
+   * @returns {Tool} MCP tool definition for range formatting
    */
   getRangeFormat(): Tool {
     return {
@@ -441,9 +505,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for resolving completion items
+   * Creates MCP tool for resolving completion item details
    * 
-   * @returns {Tool} Completion resolve tool
+   * Fetches extended information for completion items including
+   * documentation, additional text edits, and detailed type information.
+   * 
+   * @returns {Tool} MCP tool definition for completion resolution
    */
   getResolves(): Tool {
     return {
@@ -461,9 +528,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting selection range
+   * Creates MCP tool for intelligent selection expansion
    * 
-   * @returns {Tool} Selection range tool
+   * Expands text selection to logical code boundaries like expressions,
+   * statements, blocks, and functions for efficient code selection.
+   * 
+   * @returns {Tool} MCP tool definition for selection range expansion
    */
   getSelectionRange(): Tool {
     return {
@@ -482,9 +552,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting semantic tokens
+   * Creates MCP tool for semantic token analysis
    * 
-   * @returns {Tool} Semantic tokens tool
+   * Extracts detailed syntax tokens for enhanced syntax highlighting,
+   * including token types, modifiers, and semantic classifications.
+   * 
+   * @returns {Tool} MCP tool definition for semantic token extraction
    */
   getSemanticTokens(): Tool {
     return {
@@ -501,9 +574,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting server capabilities
+   * Creates MCP tool for language server capability inspection
    * 
-   * @returns {Tool} Server capabilities tool
+   * Retrieves comprehensive LSP server capabilities and maps them
+   * to available MCP tools for dynamic tool discovery and debugging.
+   * 
+   * @returns {Tool} MCP tool definition for server capability analysis
    */
   getServerCapabilities(): Tool {
     return {
@@ -520,9 +596,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting server projects
+   * Creates MCP tool for server project enumeration
    * 
-   * @returns {Tool} Server projects tool
+   * Lists all configured projects for a language server including
+   * paths, extensions, and configuration details.
+   * 
+   * @returns {Tool} MCP tool definition for project listing
    */
   getServerProjects(): Tool {
     return {
@@ -539,9 +618,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting language server status
+   * Creates MCP tool for language server status monitoring
    * 
-   * @returns {Tool} Server status tool
+   * Provides detailed runtime status including process state, uptime,
+   * project associations, and error conditions for all language servers.
+   * 
+   * @returns {Tool} MCP tool definition for server status monitoring
    */
   getServerStatus(): Tool {
     return {
@@ -558,9 +640,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting signature help
+   * Creates MCP tool for function signature help
    * 
-   * @returns {Tool} Signature help tool
+   * Provides function signature information, parameter details, and overload
+   * documentation to assist with function calls and method invocations.
+   * 
+   * @returns {Tool} MCP tool definition for signature help
    */
   getSignature(): Tool {
     return {
@@ -579,9 +664,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting subtypes
+   * Creates MCP tool for type hierarchy subtype discovery
    * 
-   * @returns {Tool} Get subtypes tool
+   * Finds all derived classes and implementing types that inherit
+   * from the specified type for inheritance analysis.
+   * 
+   * @returns {Tool} MCP tool definition for subtype discovery
    */
   getSubtypes(): Tool {
     return {
@@ -598,9 +686,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting supertypes
+   * Creates MCP tool for type hierarchy supertype discovery
    * 
-   * @returns {Tool} Get supertypes tool
+   * Finds all base classes and implemented interfaces that the
+   * specified type inherits from for inheritance analysis.
+   * 
+   * @returns {Tool} MCP tool definition for supertype discovery
    */
   getSupertypes(): Tool {
     return {
@@ -617,9 +708,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting symbol definitions
+   * Creates MCP tool for symbol definition navigation
    * 
-   * @returns {Tool} Symbol definitions tool
+   * Locates primary definitions of symbols, functions, classes, or variables
+   * for precise navigation to declaration sites in code.
+   * 
+   * @returns {Tool} MCP tool definition for definition lookup
    */
   getSymbolDefinitions(): Tool {
     return {
@@ -638,9 +732,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting symbol references
+   * Creates MCP tool for symbol reference search
    * 
-   * @returns {Tool} Symbol references tool
+   * Finds all usage locations of symbols throughout the workspace
+   * with optional inclusion of symbol declarations.
+   * 
+   * @returns {Tool} MCP tool definition for reference search
    */
   getSymbolReferences(): Tool {
     return {
@@ -660,9 +757,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting symbol renames
+   * Creates MCP tool for symbol rename preview
    * 
-   * @returns {Tool} Symbol renames tool
+   * Generates preview of all code locations that would be affected
+   * by symbol rename operations for review before execution.
+   * 
+   * @returns {Tool} MCP tool definition for rename preview
    */
   getSymbolRenames(): Tool {
     return {
@@ -682,9 +782,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting document symbols
+   * Creates MCP tool for document symbol listing with pagination
    * 
-   * @returns {Tool} Document symbols tool
+   * Extracts document outline including functions, classes, variables,
+   * and other symbols with hierarchical structure and pagination.
+   * 
+   * @returns {Tool} MCP tool definition for document symbol enumeration
    */
   getSymbols(): Tool {
     return {
@@ -703,9 +806,12 @@ export class McpTool {
   }
 
   /**
-   * Returns all available MCP tools
+   * Aggregates all available MCP tools into comprehensive registry
    * 
-   * @returns {Tool[]} Array of MCP tool definitions
+   * Returns complete collection of LSP-to-MCP tool definitions including
+   * language features, server management, and workspace operations.
+   * 
+   * @returns {Tool[]} Complete array of all available MCP tool definitions
    */
   getTools(): Tool[] {
     return [
@@ -752,9 +858,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting type definitions
+   * Creates MCP tool for type definition navigation
    * 
-   * @returns {Tool} Type definitions tool
+   * Navigates to type definitions rather than symbol definitions,
+   * useful for understanding data types and class hierarchies.
+   * 
+   * @returns {Tool} MCP tool definition for type definition lookup
    */
   getTypeDefinitions(): Tool {
     return {
@@ -773,9 +882,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for getting type hierarchy
+   * Creates MCP tool for type hierarchy analysis
    * 
-   * @returns {Tool} Get type hierarchy tool
+   * Builds type hierarchy structure showing inheritance relationships
+   * for object-oriented programming navigation and analysis.
+   * 
+   * @returns {Tool} MCP tool definition for type hierarchy preparation
    */
   getTypeHierarchy(): Tool {
     return {
@@ -794,9 +906,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for loading project files
+   * Creates MCP tool for project file loading
    * 
-   * @returns {Tool} Load project files tool
+   * Triggers comprehensive workspace indexing by loading all project files
+   * into the language server with optional timeout control.
+   * 
+   * @returns {Tool} MCP tool definition for project file loading
    */
   loadProjectFiles(): Tool {
     return {
@@ -815,9 +930,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for restarting language servers
+   * Creates MCP tool for language server restart operations
    * 
-   * @returns {Tool} Restart server tool
+   * Enables restarting language servers with new project configurations
+   * for error recovery and configuration changes.
+   * 
+   * @returns {Tool} MCP tool definition for server restart
    */
   restartServer(): Tool {
     return {
@@ -835,9 +953,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for starting language servers
+   * Creates MCP tool for language server startup operations
    * 
-   * @returns {Tool} Start server tool
+   * Initializes new language server instances with project selection,
+   * enabling LSP features for target codebases and development workflows.
+   * 
+   * @returns {Tool} MCP tool definition for server startup
    */
   startServer(): Tool {
     return {
@@ -855,9 +976,12 @@ export class McpTool {
   }
 
   /**
-   * Tool definition for stopping language servers
+   * Creates MCP tool for language server shutdown operations
    * 
-   * @returns {Tool} Stop server tool
+   * Gracefully terminates language server processes with proper cleanup,
+   * ensuring resource management and process lifecycle control.
+   * 
+   * @returns {Tool} MCP tool definition for server shutdown
    */
   stopServer(): Tool {
     return {
