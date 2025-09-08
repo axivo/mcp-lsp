@@ -109,12 +109,12 @@ interface ServerConnection {
  */
 export class Client {
   private config: Config;
-  private connections = new Map<string, ServerConnection>();
+  private connections: Map<string, ServerConnection> = new Map();
   private initializedProjects: Set<string> = new Set();
-  private languageIdCache = new Map<string, string>();
   private openedFiles: Map<string, Set<string>> = new Map();
-  private projectFiles: Map<string, Map<string, string[]>> = new Map();
-  private projectId = new Map<string, string>();
+  private projectFiles: Map<string, string[]> = new Map();
+  private projectId: Map<string, string> = new Map();
+  private projectPath: Map<string, string> = new Map();
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
   private readonly readFileAsync = promisify(gracefulFs.readFile);
@@ -239,6 +239,22 @@ export class Client {
   }
 
   /**
+   * Gets the language ID for a specific project name
+   * 
+   * @private
+   * @param {string} project - Project name
+   * @returns {string | undefined} Language identifier for the project, or undefined if not found
+   */
+  private getLanguageId(project: string): string | undefined {
+    for (const [languageId, projectName] of this.projectId.entries()) {
+      if (projectName === project) {
+        return languageId;
+      }
+    }
+    return undefined;
+  }
+
+  /**
    * Gets server information for a specific file path using caching and extension matching
    * 
    * Converts relative paths to absolute, checks cache first for performance,
@@ -251,7 +267,7 @@ export class Client {
    */
   private getServerInfo(filePath: string): string | null {
     const absolutePath = isAbsolute(filePath) ? filePath : join(process.cwd(), filePath);
-    const cachedProject = this.languageIdCache.get(absolutePath);
+    const cachedProject = this.projectPath.get(absolutePath);
     if (cachedProject) {
       return cachedProject;
     }
@@ -263,7 +279,7 @@ export class Client {
           if (projectConfig && absolutePath.startsWith(projectConfig.path)) {
             for (const extension of serverConfig.extensions) {
               if (filePath.endsWith(extension)) {
-                this.languageIdCache.set(absolutePath, project);
+                this.projectPath.set(absolutePath, project);
                 return project;
               }
             }
@@ -340,15 +356,12 @@ export class Client {
     serverConnection.capabilities = initializeResult.capabilities;
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
     await this.setFilesCache(project, projectConfig, serverConfig.extensions);
-    const cachedFiles = this.projectFiles.get(project);
-    if (cachedFiles && cachedFiles.size) {
-      const projectFiles = cachedFiles.get(project);
-      if (projectFiles && projectFiles.length) {
-        await this.openFile(languageId, project, projectFiles[0]);
-      }
+    const projectFiles = this.projectFiles.get(project);
+    if (projectFiles && projectFiles.length) {
+      await this.openFile(languageId, project, projectFiles[0]);
     }
     try {
-      if (cachedFiles && cachedFiles.size && serverConfig.settings.workspace === false) {
+      if (projectFiles && projectFiles.length && serverConfig.settings.workspace === false) {
         serverConnection.initialized = true;
       } else {
         const params = { query: '' };
@@ -555,17 +568,12 @@ export class Client {
    * @returns {Promise<void>} Promise that resolves when file discovery and caching complete
    */
   private async setFilesCache(project: string, projectConfig: ProjectConfig, extensions: string[]): Promise<void> {
-    let cachedFiles = this.projectFiles.get(project);
-    if (!cachedFiles) {
-      cachedFiles = new Map<string, string[]>();
-      this.projectFiles.set(project, cachedFiles);
-    }
     const files = await this.findFiles(projectConfig.path, extensions, projectConfig.patterns);
     if (files.length) {
       files.forEach(filePath => {
-        this.languageIdCache.set(filePath, project);
+        this.projectPath.set(filePath, project);
       });
-      cachedFiles.set(project, files);
+      this.projectFiles.set(project, files);
     }
   }
 
@@ -588,9 +596,9 @@ export class Client {
           break;
         }
       }
-      for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
+      for (const [filePath, cachedProject] of this.projectPath.entries()) {
         if (cachedProject === project) {
-          this.languageIdCache.delete(filePath);
+          this.projectPath.delete(filePath);
         }
       }
       this.connections.delete(project);
@@ -628,12 +636,10 @@ export class Client {
     if (!projectConfig) {
       return null;
     }
-    let cachedFiles = this.projectFiles.get(project);
-    let projectFiles = cachedFiles?.get(project);
+    let projectFiles = this.projectFiles.get(project);
     if (!projectFiles) {
       await this.setFilesCache(project, projectConfig, serverConfig.extensions);
-      cachedFiles = this.projectFiles.get(project)!;
-      projectFiles = cachedFiles.get(project);
+      projectFiles = this.projectFiles.get(project);
     }
     return projectFiles || null;
   }
@@ -906,6 +912,16 @@ export class Client {
       }
       return `File '${file}' does not belong to running language server.`;
     }
+    let languageId: string | undefined;
+    for (const [id, projectName] of this.projectId.entries()) {
+      if (projectName === project) {
+        languageId = id;
+        break;
+      }
+    }
+    if (!languageId) {
+      return 'Language server not found.';
+    }
     const methods: string[] = [
       CallHierarchyIncomingCallsRequest.method,
       CallHierarchyOutgoingCallsRequest.method,
@@ -930,30 +946,20 @@ export class Client {
       TypeDefinitionRequest.method,
       TypeHierarchyPrepareRequest.method,
       TypeHierarchySubtypesRequest.method,
-      TypeHierarchySupertypesRequest.method
+      TypeHierarchySupertypesRequest.method,
+      WorkspaceSymbolRequest.method
     ];
     if (methods.includes(method)) {
-      for (const [languageId, runningProject] of this.projectId.entries()) {
-        if (runningProject === project) {
-          if (!this.initializedProjects.has(project)) {
-            const cachedFiles = this.projectFiles.get(project);
-            if (cachedFiles) {
-              const projectFiles = cachedFiles.get(project);
-              if (projectFiles) {
-                await this.openFiles(languageId, project, projectFiles);
-              }
-            }
-          }
-          return this.sendRequest(languageId, project, method, params);
+      if (!this.initializedProjects.has(project)) {
+        const projectFiles = this.projectFiles.get(project);
+        if (projectFiles) {
+          await this.openFiles(languageId, project, projectFiles);
+          this.initializedProjects.add(project);
         }
       }
+      return this.sendRequest(languageId, project, method, params);
     }
-    for (const [languageId, runningProject] of this.projectId.entries()) {
-      if (runningProject === project) {
-        return this.sendRequest(languageId, project, method, params);
-      }
-    }
-    return 'Language server not found for file.';
+    return this.sendRequest(languageId, project, method, params);
   }
 
   /**
@@ -1059,9 +1065,9 @@ export class Client {
         break;
       }
     }
-    for (const [filePath, cachedProject] of this.languageIdCache.entries()) {
+    for (const [filePath, cachedProject] of this.projectPath.entries()) {
       if (cachedProject === project) {
-        this.languageIdCache.delete(filePath);
+        this.projectPath.delete(filePath);
       }
     }
     serverConnection.connection.sendNotification(ExitNotification.method, {});

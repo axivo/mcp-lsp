@@ -1010,14 +1010,18 @@ export class McpServer {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
     const params: WorkspaceSymbolParams = { query: args.query };
-    const fullResult = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
-    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
-      return this.client.response(fullResult);
+    const files = await this.client.getProjectFiles(args.language_id, args.project);
+    if (!files) {
+      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
+    }
+    const result = await this.client.sendServerRequest(files[0], WorkspaceSymbolRequest.method, params);
+    if (typeof result === 'string' || !Array.isArray(result)) {
+      return this.client.response(result);
     }
     const limit = args.limit ?? this.limit;
     const offset = args.offset ?? 0;
-    const total = fullResult.length;
-    const paginatedItems = fullResult.slice(offset, offset + limit);
+    const total = result.length;
+    const paginatedItems = result.slice(offset, offset + limit);
     const more = offset + limit < total;
     const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
     const data = {
