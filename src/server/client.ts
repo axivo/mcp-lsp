@@ -302,7 +302,6 @@ export class Client {
         removed: []
       }
     });
-    this.initializedProjects.add(project);
   }
 
   /**
@@ -345,7 +344,7 @@ export class Client {
     if (cachedFiles && cachedFiles.size) {
       const projectFiles = cachedFiles.get(project);
       if (projectFiles && projectFiles.length) {
-        await this.openFiles(languageId, project, [projectFiles[0]]);
+        await this.openFile(languageId, project, projectFiles[0]);
       }
     }
     try {
@@ -750,37 +749,23 @@ export class Client {
     if (!projectFiles) {
       return this.response(`Files not found for '${project}' project in '${languageId}' language server.`);
     }
-    const unopenedFiles = projectFiles.filter(file => {
-      const uri = pathToFileURL(file).toString();
-      return !this.openedFiles.get(project)?.has(uri);
-    });
-    if (unopenedFiles.length) {
-      if (timeout) {
-        try {
-          await this.openFiles(languageId, project, unopenedFiles, timeout);
-        } catch (error) {
-          const message = `Timeout loading project files for '${project}' project in '${languageId}' language server.`;
-          return this.response(message, false, {
-            languageId,
-            project,
-            files: unopenedFiles.length,
-            path: projectConfig.path,
-            timeout: `${timeout}ms`
-          });
-        }
-      } else {
-        await this.openFiles(languageId, project, unopenedFiles);
+    if (timeout) {
+      try {
+        await this.openFiles(languageId, project, projectFiles, timeout);
+      } catch (error) {
+        const message = `Timeout loading project files for '${project}' project in '${languageId}' language server.`;
+        return this.response(message, false, {
+          languageId,
+          project,
+          files: projectFiles.length,
+          path: projectConfig.path,
+          timeout: `${timeout}ms`
+        });
       }
-      const elapsed = Date.now() - timer;
-      const message = `Successfully loaded project files for '${project}' project in '${languageId}' language server.`;
-      return this.response(message, false, {
-        languageId,
-        project,
-        files: unopenedFiles.length,
-        path: projectConfig.path,
-        time: `${elapsed}ms`
-      });
+    } else {
+      await this.openFiles(languageId, project, projectFiles);
     }
+    this.initializedProjects.add(project);
     const elapsed = Date.now() - timer;
     const message = `Successfully loaded project files for '${project}' project in '${languageId}' language server.`;
     return this.response(message, false, {
@@ -950,11 +935,13 @@ export class Client {
     if (methods.includes(method)) {
       for (const [languageId, runningProject] of this.projectId.entries()) {
         if (runningProject === project) {
-          const cachedFiles = this.projectFiles.get(project);
-          if (cachedFiles) {
-            const projectFiles = cachedFiles.get(project);
-            if (projectFiles) {
-              await this.openFiles(languageId, project, projectFiles);
+          if (!this.initializedProjects.has(project)) {
+            const cachedFiles = this.projectFiles.get(project);
+            if (cachedFiles) {
+              const projectFiles = cachedFiles.get(project);
+              if (projectFiles) {
+                await this.openFiles(languageId, project, projectFiles);
+              }
             }
           }
           return this.sendRequest(languageId, project, method, params);
