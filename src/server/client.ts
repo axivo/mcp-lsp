@@ -303,8 +303,8 @@ export class Client {
    * @returns {Promise<void>} Promise that resolves when workspace folders are configured
    */
   private async initializeProject(languageId: string, project: string): Promise<void> {
-    if (this.initializedProjects.has(project)) {
-      return;
+    if (!this.initializedProjects.has(project)) {
+      this.initializedProjects.add(project);
     }
     const serverConfig = this.config.getServerConfig(languageId);
     const projectConfig = serverConfig.projects.find(id => id.name === project)!;
@@ -755,6 +755,9 @@ export class Client {
     if (!projectFiles) {
       return this.response(`Files not found for '${project}' project in '${languageId}' language server.`);
     }
+    if (!this.initializedProjects.has(project)) {
+      this.initializedProjects.add(project);
+    }
     if (timeout) {
       try {
         await this.openFiles(languageId, project, projectFiles, timeout);
@@ -771,7 +774,6 @@ export class Client {
     } else {
       await this.openFiles(languageId, project, projectFiles);
     }
-    this.initializedProjects.add(project);
     const elapsed = Date.now() - timer;
     const message = `Successfully loaded project files for '${project}' project in '${languageId}' language server.`;
     return this.response(message, false, {
@@ -882,7 +884,7 @@ export class Client {
     if (!serverConnection || !serverConnection.process.stdin) {
       return this.response(`Language server '${project}' is not running.`);
     }
-    if (method === WorkspaceSymbolRequest.method) {
+    if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
       await this.initializeProject(languageId, project);
     }
     try {
@@ -950,11 +952,13 @@ export class Client {
       WorkspaceSymbolRequest.method
     ];
     if (methods.includes(method)) {
-      if (!this.initializedProjects.has(project)) {
+      if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
         const projectFiles = this.projectFiles.get(project);
         if (projectFiles) {
+          if (method === WorkspaceSymbolRequest.method) {
+            this.openedFiles.delete(project);
+          }
           await this.openFiles(languageId, project, projectFiles);
-          this.initializedProjects.add(project);
         }
       }
       return this.sendRequest(languageId, project, method, params);

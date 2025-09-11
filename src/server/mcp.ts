@@ -257,7 +257,7 @@ interface GetProjectFiles extends Project {
  * @property {number} [timeout] - Optional timeout for symbol indexing
  */
 interface GetProjectSymbols extends Project {
-  query: string;
+  query?: string;
   limit?: number;
   offset?: number;
   timeout?: number;
@@ -1009,7 +1009,7 @@ export class McpServer {
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    const params: WorkspaceSymbolParams = { query: args.query };
+    const params: WorkspaceSymbolParams = { query: args.query ?? '' };
     const files = await this.client.getProjectFiles(args.language_id, args.project);
     if (!files) {
       return `No files found for '${args.project}' project in '${args.language_id}' language server.`;

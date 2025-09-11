@@ -468,12 +468,12 @@ export class McpTool {
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
-          query: { type: 'string', description: 'Symbol search query' },
+          query: { type: 'string', description: 'Symbol search query', default: '' },
           limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
           offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
-        required: ['language_id', 'project', 'query']
+        required: ['language_id', 'project']
       }
     };
   }
