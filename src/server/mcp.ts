@@ -581,6 +581,7 @@ export class McpServer {
   private client: Client;
   private config: Config;
   private limit: number;
+  private query: string;
   private server: Server;
   private tool: McpTool;
   private toolHandler: Map<string, ToolHandler>;
@@ -595,14 +596,15 @@ export class McpServer {
    * @param {string} configPath - Path to the LSP configuration JSON file
    */
   constructor(configPath: string) {
-    this.client = new Client(configPath);
+    this.query = '';
+    this.client = new Client(configPath, this.query);
     this.config = new Config(configPath);
     this.limit = 250;
     this.server = new Server(
       { name: 'language-server-protocol', version: this.client.version() },
       { capabilities: { tools: {} } }
     );
-    this.tool = new McpTool(this.limit);
+    this.tool = new McpTool(this.limit, this.query);
     this.toolHandler = new Map<string, ToolHandler>();
     this.setupToolHandlers();
     this.setupHandlers();
@@ -1009,7 +1011,7 @@ export class McpServer {
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
-    const params: WorkspaceSymbolParams = { query: args.query ?? '' };
+    const params: WorkspaceSymbolParams = { query: args.query ?? this.query };
     const files = await this.client.getProjectFiles(args.language_id, args.project);
     if (!files) {
       return `No files found for '${args.project}' project in '${args.language_id}' language server.`;

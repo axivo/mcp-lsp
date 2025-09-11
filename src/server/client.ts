@@ -115,6 +115,7 @@ export class Client {
   private projectFiles: Map<string, string[]> = new Map();
   private projectId: Map<string, string> = new Map();
   private projectPath: Map<string, string> = new Map();
+  private query: string;
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
   private readonly readFileAsync = promisify(gracefulFs.readFile);
@@ -124,9 +125,11 @@ export class Client {
    * Creates a new Client instance
    * 
    * @param {string} configPath - Path to the language server configuration file
+   * @param {string} query - Default query
    */
-  constructor(configPath: string) {
+  constructor(configPath: string, query: string) {
     this.config = new Config(configPath);
+    this.query = query;
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
   }
@@ -364,7 +367,7 @@ export class Client {
       if (projectFiles && projectFiles.length && serverConfig.settings.workspace === false) {
         serverConnection.initialized = true;
       } else {
-        const params = { query: '' };
+        const params = { query: this.query };
         await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
         serverConnection.initialized = true;
       }

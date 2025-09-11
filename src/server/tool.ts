@@ -18,6 +18,7 @@ import { Tool } from '@modelcontextprotocol/sdk/types.js';
  */
 export class McpTool {
   private limit: number;
+  private query: string;
 
   /**
    * Creates a new McpTool instance with pagination configuration
@@ -26,9 +27,11 @@ export class McpTool {
    * for all tools that support result pagination.
    * 
    * @param {number} limit - Default pagination limit for paginated tool results
+   * @param {string} query - Default query
    */
-  constructor(limit: number) {
+  constructor(limit: number, query: string) {
     this.limit = limit;
+    this.query = query;
   }
 
   /**
@@ -468,7 +471,7 @@ export class McpTool {
         properties: {
           language_id: { type: 'string', description: 'Language identifier' },
           project: { type: 'string', description: 'Project name to search within' },
-          query: { type: 'string', description: 'Symbol search query', default: '' },
+          query: { type: 'string', description: 'Symbol search query', default: this.query },
           limit: { type: 'number', description: 'Pagination limit for number of symbols to return', default: this.limit },
           offset: { type: 'number', description: 'Pagination offset for number of symbols to skip', default: 0 },
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
