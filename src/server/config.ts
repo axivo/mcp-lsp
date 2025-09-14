@@ -44,6 +44,7 @@ export interface ProjectConfig {
 /**
  * Language server configuration with runtime settings
  * 
+ * @export
  * @interface ServerConfig
  * @property {string[]} args - Command line arguments for server process
  * @property {Partial<ClientCapabilities>} [capabilities] - Optional LSP client capability overrides
@@ -53,7 +54,7 @@ export interface ProjectConfig {
  * @property {ProjectConfig[]} projects - Array of projects using this language server
  * @property {object} [settings] - Optional runtime behavior settings
  */
-interface ServerConfig {
+export interface ServerConfig {
   args: string[];
   capabilities?: Partial<ClientCapabilities>;
   command: string;
@@ -78,6 +79,7 @@ interface ServerConfig {
  * Handles parsing, validation, and access to LSP server configuration files
  * with comprehensive error handling, type safety, and default value management.
  * 
+ * @export
  * @class Config
  */
 export class Config {

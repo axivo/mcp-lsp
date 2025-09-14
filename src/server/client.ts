@@ -67,7 +67,7 @@ import {
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { Config, ProjectConfig } from './config.js';
+import { Config, ProjectConfig, ServerConfig } from './config.js';
 
 /**
  * Standardized response format for MCP tool execution
@@ -132,6 +132,29 @@ export class Client {
     this.query = query;
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
+  }
+
+  /**
+   * Checks project configuration validity for server operations
+   * 
+   * Validates that the language server is properly configured and the
+   * specified project exists within the server's project list.
+   * 
+   * @private
+   * @param {string} languageId - Language identifier
+   * @param {string} [project] - Project name to validate, defaults to first project
+   * @returns {{ config: { server: ServerConfig; project: ProjectConfig } } | Response} Config object on success, error response on failure
+   */
+  private checkConfig(languageId: string, project?: string): { config: { server: ServerConfig; project: ProjectConfig } } | Response {
+    const serverConfig = this.config.getServerConfig(languageId);
+    if (!serverConfig.command) {
+      return this.response(`Language server '${languageId}' is not configured.`);
+    }
+    const projectConfig = project ? serverConfig.projects.find(id => id.name === project) : serverConfig.projects[0];
+    if (!projectConfig) {
+      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
+    }
+    return { config: { server: serverConfig, project: projectConfig } };
   }
 
   /**
@@ -786,14 +809,11 @@ export class Client {
    */
   async loadProjectFiles(languageId: string, project: string, timeout?: number): Promise<Response> {
     const timer = Date.now();
-    const serverConfig = this.config.getServerConfig(languageId);
-    if (!serverConfig.command) {
-      return this.response(`Language server '${languageId}' is not configured.`);
+    const result = this.checkConfig(languageId, project);
+    if ('content' in result) {
+      return result;
     }
-    const projectConfig = serverConfig.projects.find(id => id.name === project);
-    if (!projectConfig) {
-      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
-    }
+    const { config } = result;
     if (!this.connections.has(project)) {
       return this.response(`Language server '${languageId}' is not started for '${project}' project.`);
     }
@@ -813,7 +833,7 @@ export class Client {
           languageId,
           project,
           files: projectFiles.length,
-          path: projectConfig.path,
+          path: config.project.path,
           timeout: `${timeout}ms`
         });
       }
@@ -826,7 +846,7 @@ export class Client {
       languageId,
       project,
       files: projectFiles.length,
-      path: projectConfig.path,
+      path: config.project.path,
       time: `${elapsed}ms`
     });
   }
@@ -859,16 +879,12 @@ export class Client {
    * @returns {Promise<Response>} Promise that resolves with restart result
    */
   async restartServer(languageId: string, project: string): Promise<Response> {
-    if (!this.config.hasServerConfig(languageId)) {
-      return this.response(`Language server '${languageId}' is not configured.`);
+    const result = this.checkConfig(languageId, project);
+    if ('content' in result) {
+      return result;
     }
     if (!this.projectId.has(languageId)) {
       return this.response(`Language server '${languageId}' is not running.`);
-    }
-    const serverConfig = this.config.getServerConfig(languageId);
-    const projectConfig = serverConfig.projects.find(id => id.name === project);
-    if (!projectConfig) {
-      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
     }
     try {
       const timer = Date.now();
@@ -1027,22 +1043,19 @@ export class Client {
    * @returns {Promise<Response>} Standardized response with server startup details and timing
    */
   async startServer(languageId: string, project?: string): Promise<Response> {
-    const serverConfig = this.config.getServerConfig(languageId);
-    if (!serverConfig.command) {
-      return this.response(`Language server '${languageId}' is not configured.`);
+    const result = this.checkConfig(languageId, project);
+    if ('content' in result) {
+      return result;
     }
-    const selectedProject = project ? serverConfig.projects.find(id => id.name === project) : serverConfig.projects[0];
-    if (!selectedProject) {
-      return this.response(`Project '${project}' not found in '${languageId}' language server configuration.`);
-    }
+    const { config } = result;
     if (this.projectId.has(languageId)) {
       const runningProject = this.projectId.get(languageId);
       return this.response(`Language server '${languageId}' with '${runningProject}' project is already running.`);
     }
     try {
       const timer = Date.now();
-      const childProcess = spawn(serverConfig.command, serverConfig.args, {
-        cwd: selectedProject.path,
+      const childProcess = spawn(config.server.command, config.server.args, {
+        cwd: config.project.path,
         env: { ...process.env },
         stdio: ['pipe', 'pipe', 'pipe']
       });
@@ -1054,18 +1067,18 @@ export class Client {
         connection,
         initialized: false,
         process: childProcess,
-        name: selectedProject.name
+        name: config.project.name
       };
-      this.projectId.set(languageId, selectedProject.name);
-      this.connections.set(selectedProject.name, serverConnection);
-      this.serverStartTimes.set(selectedProject.name, timer);
-      this.setProcessHandlers(selectedProject.name, childProcess);
-      await this.initializeServer(languageId, selectedProject.name);
-      const message = `Successfully started '${languageId}' language server with '${selectedProject.name}' project.`;
+      this.projectId.set(languageId, config.project.name);
+      this.connections.set(config.project.name, serverConnection);
+      this.serverStartTimes.set(config.project.name, timer);
+      this.setProcessHandlers(config.project.name, childProcess);
+      await this.initializeServer(languageId, config.project.name);
+      const message = `Successfully started '${languageId}' language server with '${config.project.name}' project.`;
       return this.response(message, false, {
         languageId,
-        project: selectedProject.name,
-        path: selectedProject.path,
+        project: config.project.name,
+        path: config.project.path,
         pid: childProcess.pid,
         time: new Date(timer).toISOString()
       });
