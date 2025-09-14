@@ -1008,15 +1008,13 @@ export class McpServer {
   async getProjectSymbols(args: GetProjectSymbols): Promise<unknown> {
     const error = this.validate(args, ['language_id', 'project', 'query']);
     if (error) return error;
+    const timer = Date.now();
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
+    await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
     const params: WorkspaceSymbolParams = { query: args.query ?? this.query };
-    const files = await this.client.getProjectFiles(args.language_id, args.project);
-    if (!files) {
-      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
-    }
-    const result = await this.client.sendServerRequest(files[0], WorkspaceSymbolRequest.method, params);
+    const result = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
     if (typeof result === 'string' || !Array.isArray(result)) {
       return this.client.response(result);
     }
@@ -1026,11 +1024,13 @@ export class McpServer {
     const paginatedItems = result.slice(offset, offset + limit);
     const more = offset + limit < total;
     const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
+    const elapsed = Date.now() - timer;
     const data = {
       language_id: args.language_id,
       project: args.project,
       query: args.query,
-      symbols: paginatedItems
+      symbols: paginatedItems,
+      time: `${elapsed}ms`
     };
     const pagination: PageMetadata = { more, offset, total };
     return this.client.response(description, false, { data, pagination });
@@ -1427,27 +1427,6 @@ export class McpServer {
   }
 
   /**
-   * Loads all project files into language server for full workspace analysis
-   * 
-   * Triggers comprehensive project file loading with optional timeout,
-   * enabling complete workspace indexing for enhanced language features.
-   * 
-   * @param {LoadProjectFiles} args - Project identification and timeout parameters
-   * @returns {Promise<Response | string>} Loading result with timing information or error message
-   */
-  async loadProjectFiles(args: LoadProjectFiles): Promise<unknown> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    return await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
-  }
-
-  /**
    * Restarts language server with specified project
    * 
    * Stops current server instance and starts fresh with new or same project,
@@ -1597,7 +1576,6 @@ export class McpServer {
       { capability: 'documentSymbolProvider', handler: this.getSymbols.bind(this), tool: this.tool.getSymbols() },
       { capability: 'typeDefinitionProvider', handler: this.getTypeDefinitions.bind(this), tool: this.tool.getTypeDefinitions() },
       { capability: 'typeHierarchyProvider', handler: this.getTypeHierarchy.bind(this), tool: this.tool.getTypeHierarchy() },
-      { capability: 'serverOperations', handler: this.loadProjectFiles.bind(this), tool: this.tool.loadProjectFiles() },
       { capability: 'serverOperations', handler: this.restartServer.bind(this), tool: this.tool.restartServer() },
       { capability: 'serverOperations', handler: this.startServer.bind(this), tool: this.tool.startServer() },
       { capability: 'serverOperations', handler: this.stopServer.bind(this), tool: this.tool.stopServer() }

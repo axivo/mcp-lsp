@@ -853,7 +853,6 @@ export class McpTool {
       this.getSymbols(),
       this.getTypeDefinitions(),
       this.getTypeHierarchy(),
-      this.loadProjectFiles(),
       this.restartServer(),
       this.startServer(),
       this.stopServer()
@@ -904,30 +903,6 @@ export class McpTool {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
-      }
-    };
-  }
-
-  /**
-   * Creates MCP tool for project file loading
-   * 
-   * Triggers comprehensive workspace indexing by loading all project files
-   * into the language server with optional timeout control.
-   * 
-   * @returns {Tool} MCP tool definition for project file loading
-   */
-  loadProjectFiles(): Tool {
-    return {
-      name: 'load_project_files',
-      description: 'Load all project files into language server for full workspace analysis',
-      inputSchema: {
-        type: 'object',
-        properties: {
-          language_id: { type: 'string', description: 'Language identifier' },
-          project: { type: 'string', description: 'Project name to load all project files from' },
-          timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
-        },
-        required: ['language_id', 'project']
       }
     };
   }

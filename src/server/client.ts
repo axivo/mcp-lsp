@@ -330,6 +330,16 @@ export class Client {
    * Establishes server capabilities, opens initial file for indexing, and validates
    * server readiness through workspace symbol query or configuration-based check.
    * 
+   * LSP Deprecation Status (as of LSP 3.17):
+   * - rootPath is deprecated in favour of rootUri
+   * - rootUri is deprecated in favour of workspaceFolders, still required by TypeScript interface
+   * - workspaceFolders is current modern standard
+   * 
+   * Both rootUri and workspaceFolders properties are provided for maximum compatibility:
+   * - Many language servers still rely on rootUri for workspace symbol indexing
+   * - Modern servers prefer workspaceFolders for multi-root workspace support
+   * - If both provided, rootUri takes precedence for workspace detection
+   * 
    * @private
    * @param {string} languageId - Language identifier for configuration and capability setup
    * @param {string} project - Project name for workspace and connection management
@@ -359,16 +369,15 @@ export class Client {
     serverConnection.capabilities = initializeResult.capabilities;
     serverConnection.connection.sendNotification(InitializedNotification.method, {});
     await this.setFilesCache(project, projectConfig, serverConfig.extensions);
+    await this.initializeProject(languageId, project);
     const projectFiles = this.projectFiles.get(project);
-    if (projectFiles && projectFiles.length) {
-      await this.openFile(languageId, project, projectFiles[0]);
-    }
     try {
-      if (projectFiles && projectFiles.length && serverConfig.settings.workspace === false) {
-        serverConnection.initialized = true;
-      } else {
-        const params = { query: this.query };
-        await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+      if (projectFiles && projectFiles.length) {
+        await this.openFile(languageId, project, projectFiles[0]);
+        if (serverConfig.settings.workspace === true) {
+          const params = { query: this.query };
+          await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+        }
         serverConnection.initialized = true;
       }
     } catch (error) {
@@ -461,6 +470,29 @@ export class Client {
       }
     } else {
       await Promise.allSettled(openFiles);
+    }
+  }
+
+  /**
+   * Opens project files for workspace analysis when needed
+   * 
+   * Ensures all project files are loaded into the language server for proper
+   * workspace symbol indexing. For WorkspaceSymbolRequest, clears opened files
+   * cache to force fresh loading on each request.
+   * 
+   * @private
+   * @param {string} languageId - Language identifier for configuration lookup
+   * @param {string} project - Project name for file tracking and connection
+   * @param {string} method - LSP method name to determine file loading strategy
+   * @returns {Promise<void>} Promise that resolves when project files are loaded
+   */
+  private async openProjectFiles(languageId: string, project: string, method: string): Promise<void> {
+    const projectFiles = this.projectFiles.get(project);
+    if (projectFiles) {
+      if (method === WorkspaceSymbolRequest.method) {
+        this.openedFiles.delete(project);
+      }
+      await this.openFiles(languageId, project, projectFiles);
     }
   }
 
@@ -712,8 +744,8 @@ export class Client {
   isServerAlive(languageId: string, path: string): boolean {
     const project = this.projectId.get(languageId);
     if (project && this.connections.has(project)) {
-      const config = this.config.getServerConfig(languageId);
-      const projectConfig = config.projects.find(id => id.name === project);
+      const serverConfig = this.config.getServerConfig(languageId);
+      const projectConfig = serverConfig.projects.find(id => id.name === project);
       return projectConfig ? path.startsWith(projectConfig.path) : false;
     }
     return false;
@@ -888,7 +920,7 @@ export class Client {
       return this.response(`Language server '${project}' is not running.`);
     }
     if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
-      await this.initializeProject(languageId, project);
+      await this.openProjectFiles(languageId, project, method);
     }
     try {
       return await serverConnection.connection.sendRequest(method, params);
@@ -956,13 +988,7 @@ export class Client {
     ];
     if (methods.includes(method)) {
       if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
-        const projectFiles = this.projectFiles.get(project);
-        if (projectFiles) {
-          if (method === WorkspaceSymbolRequest.method) {
-            this.openedFiles.delete(project);
-          }
-          await this.openFiles(languageId, project, projectFiles);
-        }
+        await this.openProjectFiles(languageId, project, method);
       }
       return this.sendRequest(languageId, project, method, params);
     }
