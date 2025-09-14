@@ -625,11 +625,9 @@ export class Client {
    */
   private setProcessHandlers(project: string, process: ChildProcess): void {
     const cleanup = () => {
-      for (const [languageId, projectName] of this.projectId.entries()) {
-        if (projectName === project) {
-          this.projectId.delete(languageId);
-          break;
-        }
+      const languageId = this.getLanguageId(project);
+      if (languageId) {
+        this.projectId.delete(languageId);
       }
       for (const [filePath, cachedProject] of this.projectPath.entries()) {
         if (cachedProject === project) {
@@ -949,13 +947,7 @@ export class Client {
       }
       return `File '${file}' does not belong to running language server.`;
     }
-    let languageId: string | undefined;
-    for (const [id, projectName] of this.projectId.entries()) {
-      if (projectName === project) {
-        languageId = id;
-        break;
-      }
-    }
+    const languageId = this.getLanguageId(project);
     if (!languageId) {
       return 'Language server not found.';
     }
@@ -1084,22 +1076,15 @@ export class Client {
     if (!serverConnection) {
       return;
     }
-    for (const [languageId, projectName] of this.projectId.entries()) {
-      if (projectName === project) {
-        const serverConfig = this.config.getServerConfig(languageId);
-        await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
-        await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
-        break;
-      }
-    }
-    for (const [languageId, projectName] of this.projectId.entries()) {
-      if (projectName === project) {
-        this.projectId.delete(languageId);
-        break;
-      }
+    const languageId = this.getLanguageId(project);
+    if (languageId) {
+      const serverConfig = this.config.getServerConfig(languageId);
+      await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
+      await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
+      this.projectId.delete(languageId);
     }
     for (const [filePath, cachedProject] of this.projectPath.entries()) {
-      if (cachedProject === project) {
+      if (project === cachedProject) {
         this.projectPath.delete(filePath);
       }
     }
