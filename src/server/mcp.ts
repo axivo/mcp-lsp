@@ -611,6 +611,221 @@ export class McpServer {
   }
 
   /**
+   * Handles tool execution requests from MCP clients
+   * 
+   * Routes incoming MCP tool requests to appropriate handler functions,
+   * validates arguments, and formats responses for MCP protocol compliance.
+   * 
+   * @private
+   * @param {CallToolRequest} request - MCP tool execution request with name and arguments
+   * @returns {Promise<Response>} MCP-compliant response with execution results
+   */
+  private async handleRequest(request: CallToolRequest): Promise<Response> {
+    if (!request.params.arguments) {
+      return this.client.response('No arguments provided');
+    }
+    const handler = this.toolHandler.get(request.params.name);
+    if (!handler) {
+      return this.client.response(`Unknown tool: ${request.params.name}`);
+    }
+    const result = await handler(request.params.arguments);
+    return this.client.response(result, typeof result === 'string' ? false : true);
+  }
+
+  /**
+   * Handles tool listing requests from MCP clients
+   * 
+   * Returns complete list of available MCP tools with their schemas
+   * and descriptions for client capability discovery.
+   * 
+   * @private
+   * @returns {Promise<{tools: Tool[]}>} Complete tool registry for MCP protocol
+   */
+  private async handleTools(): Promise<{ tools: Tool[] }> {
+    return { tools: this.tool.getTools() };
+  }
+
+  /**
+   * Creates a paginated MCP response with standardized pagination metadata
+   * 
+   * @private
+   * @template T - Type of items being paginated
+   * @param {T[]} items - Array of items to paginate
+   * @param {object} args - Pagination arguments with limit and offset
+   * @param {string} description - Descriptive message for the response
+   * @param {Record<string, unknown>} [data] - Optional additional data to include in response
+   * @returns {Response} MCP-compliant paginated response with data and pagination metadata
+   */
+  private paginatedResponse<T>(items: T[], args: { limit?: number; offset?: number }, description: string, data?: Record<string, unknown>): Response {
+    const limit = args.limit ?? this.limit;
+    const offset = args.offset ?? 0;
+    const total = items.length;
+    const paginatedItems = items.slice(offset, offset + limit);
+    const more = offset + limit < total;
+    const response = { ...data, items: paginatedItems };
+    const pagination = { more, offset, total };
+    return this.client.response(description, false, { response, pagination });
+  }
+
+  /**
+   * Extracts file path from URI and validates presence
+   * 
+   * Converts 'file://' URIs to local file paths for language server communication.
+   * Returns error message if URI is missing or malformed.
+   * 
+   * @private
+   * @param {{name: string, uri?: string}} item - Object with name and optional URI property
+   * @returns {string} File path without 'file://' prefix or error message
+   */
+  private setFilePath(item: { name: string, uri?: string }): string {
+    if (!item.uri) {
+      return `Invalid '${item.name}' item: missing URI`;
+    }
+    return item.uri.replace('file://', '');
+  }
+
+  /**
+   * Maps LSP server capabilities to corresponding MCP tools
+   * 
+   * Creates comprehensive mapping between LSP capabilities and MCP tool handlers,
+   * enabling dynamic tool availability based on server features.
+   * 
+   * @private
+   * @returns {ServerTools[]} Array of capability-to-tool-handler mappings
+   */
+  private setServerTools(): ServerTools[] {
+    return [
+      { capability: 'callHierarchyProvider', handler: this.getCallHierarchy.bind(this), tool: this.tool.getCallHierarchy() },
+      { capability: 'codeActionProvider', handler: this.getCodeActions.bind(this), tool: this.tool.getCodeActions() },
+      { capability: 'codeActionProvider', handler: this.getCodeResolves.bind(this), tool: this.tool.getCodeResolves() },
+      { capability: 'colorProvider', handler: this.getColors.bind(this), tool: this.tool.getColors() },
+      { capability: 'completionProvider', handler: this.getCompletions.bind(this), tool: this.tool.getCompletions() },
+      { capability: 'foldingRangeProvider', handler: this.getFoldingRanges.bind(this), tool: this.tool.getFoldingRanges() },
+      { capability: 'documentFormattingProvider', handler: this.getFormat.bind(this), tool: this.tool.getFormat() },
+      { capability: 'documentHighlightProvider', handler: this.getHighlights.bind(this), tool: this.tool.getHighlights() },
+      { capability: 'hoverProvider', handler: this.getHover.bind(this), tool: this.tool.getHover() },
+      { capability: 'implementationProvider', handler: this.getImplementations.bind(this), tool: this.tool.getImplementations() },
+      { capability: 'callHierarchyProvider', handler: this.getIncomingCalls.bind(this), tool: this.tool.getIncomingCalls() },
+      { capability: 'inlayHintProvider', handler: this.getInlayHint.bind(this), tool: this.tool.getInlayHint() },
+      { capability: 'inlayHintProvider', handler: this.getInlayHints.bind(this), tool: this.tool.getInlayHints() },
+      { capability: 'linkedEditingRangeProvider', handler: this.getLinkedEditingRange.bind(this), tool: this.tool.getLinkedEditingRange() },
+      { capability: 'documentLinkProvider', handler: this.getLinkResolves.bind(this), tool: this.tool.getLinkResolves() },
+      { capability: 'documentLinkProvider', handler: this.getLinks.bind(this), tool: this.tool.getLinks() },
+      { capability: 'callHierarchyProvider', handler: this.getOutgoingCalls.bind(this), tool: this.tool.getOutgoingCalls() },
+      { capability: 'serverOperations', handler: this.getProjectFiles.bind(this), tool: this.tool.getProjectFiles() },
+      { capability: 'workspaceSymbolProvider', handler: this.getProjectSymbols.bind(this), tool: this.tool.getProjectSymbols() },
+      { capability: 'documentRangeFormattingProvider', handler: this.getRangeFormat.bind(this), tool: this.tool.getRangeFormat() },
+      { capability: 'completionProvider', handler: this.getResolves.bind(this), tool: this.tool.getResolves() },
+      { capability: 'selectionRangeProvider', handler: this.getSelectionRange.bind(this), tool: this.tool.getSelectionRange() },
+      { capability: 'semanticTokensProvider', handler: this.getSemanticTokens.bind(this), tool: this.tool.getSemanticTokens() },
+      { capability: 'serverOperations', handler: this.getServerCapabilities.bind(this), tool: this.tool.getServerCapabilities() },
+      { capability: 'serverOperations', handler: this.getServerProjects.bind(this), tool: this.tool.getServerProjects() },
+      { capability: 'serverOperations', handler: this.getServerStatus.bind(this), tool: this.tool.getServerStatus() },
+      { capability: 'signatureHelpProvider', handler: this.getSignature.bind(this), tool: this.tool.getSignature() },
+      { capability: 'typeHierarchyProvider', handler: this.getSubtypes.bind(this), tool: this.tool.getSubtypes() },
+      { capability: 'typeHierarchyProvider', handler: this.getSupertypes.bind(this), tool: this.tool.getSupertypes() },
+      { capability: 'definitionProvider', handler: this.getSymbolDefinitions.bind(this), tool: this.tool.getSymbolDefinitions() },
+      { capability: 'referencesProvider', handler: this.getSymbolReferences.bind(this), tool: this.tool.getSymbolReferences() },
+      { capability: 'renameProvider', handler: this.getSymbolRenames.bind(this), tool: this.tool.getSymbolRenames() },
+      { capability: 'documentSymbolProvider', handler: this.getSymbols.bind(this), tool: this.tool.getSymbols() },
+      { capability: 'typeDefinitionProvider', handler: this.getTypeDefinitions.bind(this), tool: this.tool.getTypeDefinitions() },
+      { capability: 'typeHierarchyProvider', handler: this.getTypeHierarchy.bind(this), tool: this.tool.getTypeHierarchy() },
+      { capability: 'serverOperations', handler: this.restartServer.bind(this), tool: this.tool.restartServer() },
+      { capability: 'serverOperations', handler: this.startServer.bind(this), tool: this.tool.startServer() },
+      { capability: 'serverOperations', handler: this.stopServer.bind(this), tool: this.tool.stopServer() }
+    ];
+  }
+
+  /**
+   * Sets up MCP request handlers for tool operations
+   * 
+   * Configures request handlers for CallToolRequest and ListToolsRequest
+   * to enable MCP client communication and tool discovery.
+   * 
+   * @private
+   */
+  private setupHandlers(): void {
+    this.server.setRequestHandler(CallToolRequestSchema, this.handleRequest.bind(this));
+    this.server.setRequestHandler(ListToolsRequestSchema, this.handleTools.bind(this));
+  }
+
+  /**
+   * Sets up tool handlers registry with argument processing
+   * 
+   * Registers all tool handlers with argument validation and default value injection,
+   * creating wrapped handlers that process MCP arguments before execution.
+   * 
+   * @private
+   */
+  private setupToolHandlers(): void {
+    const tools = this.setServerTools();
+    for (const { tool, handler } of tools) {
+      const wrappedHandler: ToolHandler = async (args: unknown) => {
+        const processedArgs = args as Record<string, unknown>;
+        const properties = tool.inputSchema?.properties;
+        if (properties) {
+          Object.entries(properties).forEach(([name, value]) => {
+            const schema = value as { default?: unknown };
+            if (processedArgs[name] === undefined && schema.default !== undefined) {
+              processedArgs[name] = schema.default;
+            }
+          });
+        }
+        return await handler(processedArgs);
+      };
+      this.toolHandler.set(tool.name, wrappedHandler);
+    }
+  }
+
+  /**
+   * Validates required arguments for tool handler methods using Zod schemas
+   * 
+   * Performs runtime validation of tool arguments against required field specifications,
+   * ensuring type safety and proper error handling for missing parameters.
+   * 
+   * @private
+   * @param {unknown} args - Tool arguments object to validate
+   * @param {string[]} fields - Array of required field names for validation
+   * @returns {string | null} Error message if validation fails, null if all requirements met
+   */
+  private validate(args: unknown, fields: string[]): string | null {
+    const type: Record<string, z.ZodType> = {};
+    for (const field of fields) {
+      if (field === 'query') {
+        type[field] = z.string();
+      } else {
+        type[field] = z.union([
+          z.number(),
+          z.record(z.string(), z.unknown()).refine((obj) => Object.keys(obj).length > 0),
+          z.string().min(1)
+        ]);
+      }
+    }
+    const schema = z.object(type);
+    const result = schema.safeParse(args);
+    if (!result.success) {
+      const missing = result.error.issues.map(issue => issue.path[0]);
+      return `Missing required arguments: ${missing.join(', ')}`;
+    }
+    return null;
+  }
+
+  /**
+   * Connects the MCP server to stdio transport with error handling
+   * 
+   * Establishes MCP communication channel using standard input/output streams,
+   * configures error handling, and starts message processing.
+   * 
+   * @param {StdioServerTransport} transport - Stdio transport for MCP communication
+   * @returns {Promise<void>} Promise that resolves when connection is established and listening
+   */
+  async connect(transport: StdioServerTransport): Promise<void> {
+    this.transport = transport;
+    transport.onerror = () => { };
+    await this.server.connect(transport);
+  }
+
+  /**
    * Generates capability-based tools map for MCP tool exposure
    * 
    * Maps LSP server capabilities to available MCP tools, creating a dynamic
@@ -980,20 +1195,12 @@ export class McpServer {
     if (!files) {
       return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
     }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = files.length;
-    const paginatedFiles = files.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedFiles.length} of ${total} project files.`;
-    const data = {
+    const description = `Showing files for '${args.project}' project.`;
+    return this.paginatedResponse(files, args, description, {
       language_id: args.language_id,
       project: args.project,
-      files: paginatedFiles,
       path: projectConfig.path
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
+    });
   }
 
   /**
@@ -1018,22 +1225,14 @@ export class McpServer {
     if (typeof result === 'string' || !Array.isArray(result)) {
       return this.client.response(result);
     }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = result.length;
-    const paginatedItems = result.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedItems.length} of ${total} project symbols.`;
+    const description = `Showing project symbols for '${args.project}' project.`;
     const elapsed = Date.now() - timer;
-    const data = {
+    return this.paginatedResponse(result, args, description, {
       language_id: args.language_id,
       project: args.project,
       query: args.query,
-      symbols: paginatedItems,
       time: `${elapsed}ms`
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
+    });
   }
 
   /**
@@ -1372,20 +1571,12 @@ export class McpServer {
     if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
       return this.client.response(fullResult);
     }
-    const limit = args.limit ?? this.limit;
-    const offset = args.offset ?? 0;
-    const total = fullResult.length;
-    const paginatedItems = fullResult.slice(offset, offset + limit);
-    const more = offset + limit < total;
-    const description = `Showing ${paginatedItems.length} of ${total} document symbols.`;
+    const description = `Showing document symbols for '${args.file_path}' file.`;
     const elapsed = Date.now() - timer;
-    const data = {
-      symbols: paginatedItems,
+    return this.paginatedResponse(fullResult, args, description, {
       file_path: args.file_path,
       time: `${elapsed}ms`
-    };
-    const pagination: PageMetadata = { more, offset, total };
-    return this.client.response(description, false, { data, pagination });
+    });
   }
 
   /**
@@ -1476,198 +1667,5 @@ export class McpServer {
       await this.client.stopServer(connection.name);
     }
     return `Successfully stopped '${args.language_id}' language server.`;
-  }
-
-  /**
-   * Handles tool execution requests from MCP clients
-   * 
-   * Routes incoming MCP tool requests to appropriate handler functions,
-   * validates arguments, and formats responses for MCP protocol compliance.
-   * 
-   * @private
-   * @param {CallToolRequest} request - MCP tool execution request with name and arguments
-   * @returns {Promise<Response>} MCP-compliant response with execution results
-   */
-  private async handleRequest(request: CallToolRequest): Promise<Response> {
-    if (!request.params.arguments) {
-      return this.client.response('No arguments provided');
-    }
-    const handler = this.toolHandler.get(request.params.name);
-    if (!handler) {
-      return this.client.response(`Unknown tool: ${request.params.name}`);
-    }
-    const result = await handler(request.params.arguments);
-    return this.client.response(result, typeof result === 'string' ? false : true);
-  }
-
-  /**
-   * Handles tool listing requests from MCP clients
-   * 
-   * Returns complete list of available MCP tools with their schemas
-   * and descriptions for client capability discovery.
-   * 
-   * @private
-   * @returns {Promise<{tools: Tool[]}>} Complete tool registry for MCP protocol
-   */
-  private async handleTools(): Promise<{ tools: Tool[] }> {
-    return { tools: this.tool.getTools() };
-  }
-
-  /**
-   * Extracts file path from URI and validates presence
-   * 
-   * Converts 'file://' URIs to local file paths for language server communication.
-   * Returns error message if URI is missing or malformed.
-   * 
-   * @private
-   * @param {{name: string, uri?: string}} item - Object with name and optional URI property
-   * @returns {string} File path without 'file://' prefix or error message
-   */
-  private setFilePath(item: { name: string, uri?: string }): string {
-    if (!item.uri) {
-      return `Invalid '${item.name}' item: missing URI`;
-    }
-    return item.uri.replace('file://', '');
-  }
-
-  /**
-   * Maps LSP server capabilities to corresponding MCP tools
-   * 
-   * Creates comprehensive mapping between LSP capabilities and MCP tool handlers,
-   * enabling dynamic tool availability based on server features.
-   * 
-   * @private
-   * @returns {ServerTools[]} Array of capability-to-tool-handler mappings
-   */
-  private setServerTools(): ServerTools[] {
-    return [
-      { capability: 'callHierarchyProvider', handler: this.getCallHierarchy.bind(this), tool: this.tool.getCallHierarchy() },
-      { capability: 'codeActionProvider', handler: this.getCodeActions.bind(this), tool: this.tool.getCodeActions() },
-      { capability: 'codeActionProvider', handler: this.getCodeResolves.bind(this), tool: this.tool.getCodeResolves() },
-      { capability: 'colorProvider', handler: this.getColors.bind(this), tool: this.tool.getColors() },
-      { capability: 'completionProvider', handler: this.getCompletions.bind(this), tool: this.tool.getCompletions() },
-      { capability: 'foldingRangeProvider', handler: this.getFoldingRanges.bind(this), tool: this.tool.getFoldingRanges() },
-      { capability: 'documentFormattingProvider', handler: this.getFormat.bind(this), tool: this.tool.getFormat() },
-      { capability: 'documentHighlightProvider', handler: this.getHighlights.bind(this), tool: this.tool.getHighlights() },
-      { capability: 'hoverProvider', handler: this.getHover.bind(this), tool: this.tool.getHover() },
-      { capability: 'implementationProvider', handler: this.getImplementations.bind(this), tool: this.tool.getImplementations() },
-      { capability: 'callHierarchyProvider', handler: this.getIncomingCalls.bind(this), tool: this.tool.getIncomingCalls() },
-      { capability: 'inlayHintProvider', handler: this.getInlayHint.bind(this), tool: this.tool.getInlayHint() },
-      { capability: 'inlayHintProvider', handler: this.getInlayHints.bind(this), tool: this.tool.getInlayHints() },
-      { capability: 'linkedEditingRangeProvider', handler: this.getLinkedEditingRange.bind(this), tool: this.tool.getLinkedEditingRange() },
-      { capability: 'documentLinkProvider', handler: this.getLinkResolves.bind(this), tool: this.tool.getLinkResolves() },
-      { capability: 'documentLinkProvider', handler: this.getLinks.bind(this), tool: this.tool.getLinks() },
-      { capability: 'callHierarchyProvider', handler: this.getOutgoingCalls.bind(this), tool: this.tool.getOutgoingCalls() },
-      { capability: 'serverOperations', handler: this.getProjectFiles.bind(this), tool: this.tool.getProjectFiles() },
-      { capability: 'workspaceSymbolProvider', handler: this.getProjectSymbols.bind(this), tool: this.tool.getProjectSymbols() },
-      { capability: 'documentRangeFormattingProvider', handler: this.getRangeFormat.bind(this), tool: this.tool.getRangeFormat() },
-      { capability: 'completionProvider', handler: this.getResolves.bind(this), tool: this.tool.getResolves() },
-      { capability: 'selectionRangeProvider', handler: this.getSelectionRange.bind(this), tool: this.tool.getSelectionRange() },
-      { capability: 'semanticTokensProvider', handler: this.getSemanticTokens.bind(this), tool: this.tool.getSemanticTokens() },
-      { capability: 'serverOperations', handler: this.getServerCapabilities.bind(this), tool: this.tool.getServerCapabilities() },
-      { capability: 'serverOperations', handler: this.getServerProjects.bind(this), tool: this.tool.getServerProjects() },
-      { capability: 'serverOperations', handler: this.getServerStatus.bind(this), tool: this.tool.getServerStatus() },
-      { capability: 'signatureHelpProvider', handler: this.getSignature.bind(this), tool: this.tool.getSignature() },
-      { capability: 'typeHierarchyProvider', handler: this.getSubtypes.bind(this), tool: this.tool.getSubtypes() },
-      { capability: 'typeHierarchyProvider', handler: this.getSupertypes.bind(this), tool: this.tool.getSupertypes() },
-      { capability: 'definitionProvider', handler: this.getSymbolDefinitions.bind(this), tool: this.tool.getSymbolDefinitions() },
-      { capability: 'referencesProvider', handler: this.getSymbolReferences.bind(this), tool: this.tool.getSymbolReferences() },
-      { capability: 'renameProvider', handler: this.getSymbolRenames.bind(this), tool: this.tool.getSymbolRenames() },
-      { capability: 'documentSymbolProvider', handler: this.getSymbols.bind(this), tool: this.tool.getSymbols() },
-      { capability: 'typeDefinitionProvider', handler: this.getTypeDefinitions.bind(this), tool: this.tool.getTypeDefinitions() },
-      { capability: 'typeHierarchyProvider', handler: this.getTypeHierarchy.bind(this), tool: this.tool.getTypeHierarchy() },
-      { capability: 'serverOperations', handler: this.restartServer.bind(this), tool: this.tool.restartServer() },
-      { capability: 'serverOperations', handler: this.startServer.bind(this), tool: this.tool.startServer() },
-      { capability: 'serverOperations', handler: this.stopServer.bind(this), tool: this.tool.stopServer() }
-    ];
-  }
-
-  /**
-   * Sets up MCP request handlers for tool operations
-   * 
-   * Configures request handlers for CallToolRequest and ListToolsRequest
-   * to enable MCP client communication and tool discovery.
-   * 
-   * @private
-   */
-  private setupHandlers(): void {
-    this.server.setRequestHandler(CallToolRequestSchema, this.handleRequest.bind(this));
-    this.server.setRequestHandler(ListToolsRequestSchema, this.handleTools.bind(this));
-  }
-
-  /**
-   * Sets up tool handlers registry with argument processing
-   * 
-   * Registers all tool handlers with argument validation and default value injection,
-   * creating wrapped handlers that process MCP arguments before execution.
-   * 
-   * @private
-   */
-  private setupToolHandlers(): void {
-    const tools = this.setServerTools();
-    for (const { tool, handler } of tools) {
-      const wrappedHandler: ToolHandler = async (args: unknown) => {
-        const processedArgs = args as Record<string, unknown>;
-        const properties = tool.inputSchema?.properties;
-        if (properties) {
-          Object.entries(properties).forEach(([name, value]) => {
-            const schema = value as { default?: unknown };
-            if (processedArgs[name] === undefined && schema.default !== undefined) {
-              processedArgs[name] = schema.default;
-            }
-          });
-        }
-        return await handler(processedArgs);
-      };
-      this.toolHandler.set(tool.name, wrappedHandler);
-    }
-  }
-
-  /**
-   * Validates required arguments for tool handler methods using Zod schemas
-   * 
-   * Performs runtime validation of tool arguments against required field specifications,
-   * ensuring type safety and proper error handling for missing parameters.
-   * 
-   * @private
-   * @param {unknown} args - Tool arguments object to validate
-   * @param {string[]} fields - Array of required field names for validation
-   * @returns {string | null} Error message if validation fails, null if all requirements met
-   */
-  private validate(args: unknown, fields: string[]): string | null {
-    const type: Record<string, z.ZodType> = {};
-    for (const field of fields) {
-      if (field === 'query') {
-        type[field] = z.string();
-      } else {
-        type[field] = z.union([
-          z.number(),
-          z.record(z.string(), z.unknown()).refine((obj) => Object.keys(obj).length > 0),
-          z.string().min(1)
-        ]);
-      }
-    }
-    const schema = z.object(type);
-    const result = schema.safeParse(args);
-    if (!result.success) {
-      const missing = result.error.issues.map(issue => issue.path[0]);
-      return `Missing required arguments: ${missing.join(', ')}`;
-    }
-    return null;
-  }
-
-  /**
-   * Connects the MCP server to stdio transport with error handling
-   * 
-   * Establishes MCP communication channel using standard input/output streams,
-   * configures error handling, and starts message processing.
-   * 
-   * @param {StdioServerTransport} transport - Stdio transport for MCP communication
-   * @returns {Promise<void>} Promise that resolves when connection is established and listening
-   */
-  async connect(transport: StdioServerTransport): Promise<void> {
-    this.transport = transport;
-    transport.onerror = () => { };
-    await this.server.connect(transport);
   }
 }
