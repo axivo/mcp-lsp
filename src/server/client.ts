@@ -204,6 +204,23 @@ export class Client {
   }
 
   /**
+   * Deletes project path mappings for cleanup operations
+   * 
+   * Iterates through project path cache and removes all file-to-project
+   * mappings for the specified project during server shutdown or cleanup.
+   * 
+   * @private
+   * @param {string} project - Project name to remove from path mappings
+   */
+  private deleteProjectPath(project: string): void {
+    for (const [filePath, cachedProject] of this.projectPath.entries()) {
+      if (project === cachedProject) {
+        this.projectPath.delete(filePath);
+      }
+    }
+  }
+
+  /**
    * Finds all files with specified extensions using fast-glob
    * 
    * Excludes common build/dependency directories by default.
@@ -629,11 +646,7 @@ export class Client {
       if (languageId) {
         this.projectId.delete(languageId);
       }
-      for (const [filePath, cachedProject] of this.projectPath.entries()) {
-        if (cachedProject === project) {
-          this.projectPath.delete(filePath);
-        }
-      }
+      this.deleteProjectPath(project);
       this.connections.delete(project);
       this.openedFiles.delete(project);
       this.projectFiles.delete(project);
@@ -1083,11 +1096,7 @@ export class Client {
       await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
       this.projectId.delete(languageId);
     }
-    for (const [filePath, cachedProject] of this.projectPath.entries()) {
-      if (project === cachedProject) {
-        this.projectPath.delete(filePath);
-      }
-    }
+    this.deleteProjectPath(project);
     serverConnection.connection.sendNotification(ExitNotification.method, {});
     serverConnection.connection.dispose();
     if (!serverConnection.process.killed) {
