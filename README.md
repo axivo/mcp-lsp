@@ -78,7 +78,6 @@ A language server configuration has the following format:
         }
       ],
       "settings": {                                 # Optional language server settings
-        "configurationRequest": true,
         "messageRequest": false,
         "registrationRequest": false,
         "workspace": false
@@ -109,7 +108,6 @@ For example, `basedpyright` requires analysis settings:
 
 These settings control LSP protocol behavior and server compatibility:
 
-- `configurationRequest` - controls whether the language server can request configuration from the MCP server using `workspace/configuration` requests, enable for servers that need runtime configuration access (default: `false`)
 - `messageRequest` - controls whether the language server can send `window/showMessage` requests to display user dialogs, disable for headless operation or automated environments (default: `true`)
 - `registrationRequest` - controls whether the language server can send `client/registerCapability` requests to dynamically register capabilities, disable for servers that ignore client capability declarations (default: `true`)
 - `workspace` - controls whether the language server initialization sends `workspace/symbol` requests to test workspace capabilities, disable for servers that don't support workspace operations or cause initialization failures (default: `true`)
