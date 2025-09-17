@@ -62,7 +62,6 @@ export interface ServerConfig {
   extensions: string[];
   projects: ProjectConfig[];
   settings?: {
-    configurationRequest?: boolean;
     maxConcurrentFileReads?: number;
     messageRequest?: boolean;
     rateLimitMaxRequests?: number;
@@ -172,9 +171,6 @@ export class Config {
         if (typeof serverConfig.settings !== 'object' || serverConfig.settings === null || Array.isArray(serverConfig.settings)) {
           return false;
         }
-        if (serverConfig.settings.configurationRequest !== undefined && typeof serverConfig.settings.configurationRequest !== 'boolean') {
-          return false;
-        }
         if (serverConfig.settings.messageRequest !== undefined && typeof serverConfig.settings.messageRequest !== 'boolean') {
           return false;
         }
@@ -242,7 +238,6 @@ export class Config {
    *   extensions: string[],
    *   projects: ProjectConfig[],
    *   settings: {
-   *     configurationRequest: boolean,
    *     maxConcurrentFileReads: number,
    *     messageRequest: boolean,
    *     rateLimitMaxRequests: number,
@@ -261,7 +256,6 @@ export class Config {
     extensions: string[];
     projects: ProjectConfig[];
     settings: {
-      configurationRequest: boolean;
       maxConcurrentFileReads: number;
       messageRequest: boolean;
       rateLimitMaxRequests: number;
@@ -279,7 +273,6 @@ export class Config {
         extensions: [],
         projects: [],
         settings: {
-          configurationRequest: false,
           maxConcurrentFileReads: 10,
           messageRequest: true,
           rateLimitMaxRequests: 100,
@@ -299,7 +292,6 @@ export class Config {
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
       settings: {
-        configurationRequest: serverConfig.settings?.configurationRequest ?? false,
         maxConcurrentFileReads: serverConfig.settings?.maxConcurrentFileReads ?? 10,
         messageRequest: serverConfig.settings?.messageRequest ?? true,
         rateLimitMaxRequests: serverConfig.settings?.rateLimitMaxRequests ?? 100,

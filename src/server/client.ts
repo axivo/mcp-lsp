@@ -204,9 +204,9 @@ export class Client {
       return this.response(`Language server '${languageId}' error: ${error}`);
     });
     const serverConfig = this.config.getServerConfig(languageId);
-    if (serverConfig.settings.configurationRequest === true) {
+    if (serverConfig.configuration && Object.keys(serverConfig.configuration).length) {
       connection.onRequest(ConfigurationRequest.method, (params: ConfigurationParams) => {
-        return [serverConfig.configuration ?? {}];
+        return [serverConfig.configuration];
       });
     }
     if (serverConfig.settings.messageRequest === false) {

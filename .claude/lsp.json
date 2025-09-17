@@ -59,10 +59,7 @@
           "url": "https://github.com/helm/helm",
           "path": "/Users/username/github/helm"
         }
-      ],
-      "settings": {
-        "configurationRequest": true
-      }
+      ]
     },
     "helm": {
       "command": "helm_ls",
@@ -104,9 +101,6 @@
             "path": "/opt/homebrew/bin/yaml-language-server"
           }
         }
-      },
-      "settings": {
-        "configurationRequest": true
       }
     },
     "python": {
