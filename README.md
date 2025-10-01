@@ -91,14 +91,16 @@ A language server configuration has the following format:
 
 Language servers often require specific configuration to function optimally. Configuration requirements are documented in each server's [official repository](https://microsoft.github.io/language-server-protocol/implementors/servers/). 
 
-For example, `basedpyright` requires analysis settings:
+For example, `pyright` requires the following settings:
 
 ```json
 "configuration": {
-  "basedpyright": {
-    "analysis": {
-      "autoSearchPaths": true,
-      "diagnosticMode": "workspace"
+  "settings": {
+    "python": {
+      "analysis": {
+        "autoSearchPaths": true,
+        "diagnosticMode": "workspace"
+      }
     }
   }
 }
