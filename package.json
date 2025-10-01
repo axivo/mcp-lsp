@@ -21,7 +21,10 @@
   "bin": {
     "mcp-lsp": "dist/index.js"
   },
-  "repository": "github:axivo/mcp-lsp",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axivo/mcp-lsp.git"
+  },
   "scripts": {
     "build": "tsc",
     "clean": "rm -rf dist"
@@ -46,5 +49,10 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "main": "index.js",
+  "bugs": {
+    "url": "https://github.com/axivo/mcp-lsp/issues"
+  },
+  "homepage": "https://github.com/axivo/mcp-lsp"
 }
