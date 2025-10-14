@@ -104,15 +104,17 @@
       }
     },
     "python": {
-      "command": "basedpyright-langserver",
+      "command": "pyright-langserver",
       "args": [
         "--stdio"
       ],
       "configuration": {
-        "basedpyright": {
-          "analysis": {
-            "autoSearchPaths": true,
-            "diagnosticMode": "workspace"
+        "settings": {
+          "python": {
+            "analysis": {
+              "autoSearchPaths": true,
+              "diagnosticMode": "workspace"
+            }
           }
         }
       },
