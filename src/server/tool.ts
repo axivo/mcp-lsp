@@ -730,6 +730,13 @@ export class McpTool {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      },
+      _meta: {
+        usage: [
+          'Place cursor on symbol usage or reference, not definition',
+          'Returns empty array when cursor is on the symbol definition itself',
+          'Works with function calls, variable references, and import statements'
+        ]
       }
     };
   }
@@ -755,6 +762,14 @@ export class McpTool {
           include_declaration: { type: 'boolean', description: 'Include declaration in results', default: true }
         },
         required: ['character', 'file_path', 'line']
+      },
+      _meta: {
+        usage: [
+          'Place cursor on symbol name',
+          'Sensitive to cursor position, be precise with character placement',
+          'Returns all locations where the symbol is used throughout the project',
+          'Works with simple symbol references, not complex expressions'
+        ]
       }
     };
   }

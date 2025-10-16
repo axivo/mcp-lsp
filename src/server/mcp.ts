@@ -820,7 +820,6 @@ export class McpServer {
    * @returns {Promise<void>} Promise that resolves when connection is established and listening
    */
   async connect(transport: StdioServerTransport): Promise<void> {
-    this.transport = transport;
     transport.onerror = () => { };
     await this.server.connect(transport);
   }
