@@ -239,6 +239,11 @@ export class McpTool {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      },
+      _meta: {
+        usage: [
+          'Returns null when hovering over whitespace or comments'
+        ]
       }
     };
   }
@@ -477,6 +482,11 @@ export class McpTool {
           timeout: { type: 'number', description: 'Optional load timeout in milliseconds' }
         },
         required: ['language_id', 'project']
+      },
+      _meta: {
+        usage: [
+          'Returns all project symbols when an empty query is used'
+        ]
       }
     };
   }
@@ -734,8 +744,7 @@ export class McpTool {
       _meta: {
         usage: [
           'Place cursor on symbol usage or reference, not definition',
-          'Returns empty array when cursor is on the symbol definition itself',
-          'Works with function calls, variable references, and import statements'
+          'Returns empty array when cursor is on the symbol definition itself'
         ]
       }
     };
@@ -766,8 +775,6 @@ export class McpTool {
       _meta: {
         usage: [
           'Place cursor on symbol name',
-          'Sensitive to cursor position, be precise with character placement',
-          'Returns all locations where the symbol is used throughout the project',
           'Works with simple symbol references, not complex expressions'
         ]
       }
