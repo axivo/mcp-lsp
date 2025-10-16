@@ -413,7 +413,7 @@ export class Client {
     const projectFiles = this.projectFiles.get(project);
     try {
       if (projectFiles && projectFiles.length) {
-        await this.openFile(languageId, project, projectFiles[0]);
+        await this.openFiles(languageId, project, projectFiles);
         if (serverConfig.settings.workspace === true) {
           const params = { query: this.query };
           await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
@@ -510,29 +510,6 @@ export class Client {
       }
     } else {
       await Promise.allSettled(openFiles);
-    }
-  }
-
-  /**
-   * Opens project files for workspace analysis when needed
-   * 
-   * Ensures all project files are loaded into the language server for proper
-   * workspace symbol indexing. For WorkspaceSymbolRequest, clears opened files
-   * cache to force fresh loading on each request.
-   * 
-   * @private
-   * @param {string} languageId - Language identifier for configuration lookup
-   * @param {string} project - Project name for file tracking and connection
-   * @param {string} method - LSP method name to determine file loading strategy
-   * @returns {Promise<void>} Promise that resolves when project files are loaded
-   */
-  private async openProjectFiles(languageId: string, project: string, method: string): Promise<void> {
-    const projectFiles = this.projectFiles.get(project);
-    if (projectFiles) {
-      if (method === WorkspaceSymbolRequest.method) {
-        this.openedFiles.delete(project);
-      }
-      await this.openFiles(languageId, project, projectFiles);
     }
   }
 
@@ -893,15 +870,16 @@ export class Client {
         await this.stopServer(runningProject);
         this.initializedProjects.delete(runningProject);
       }
-      const startResponse = await this.startServer(languageId, project);
+      const response = await this.startServer(languageId, project);
+      const responseData = response.data as { path?: string; pid?: number };
+      const elapsed = Date.now() - timer;
       const message = `Successfully restarted '${languageId}' language server with '${project}' project.`;
-      const responseData = startResponse.data as { path?: string; pid?: number };
       return this.response(message, false, {
         languageId,
         project,
         path: responseData.path,
         pid: responseData.pid,
-        time: new Date(timer).toISOString()
+        time: `${elapsed}ms`
       });
     } catch (error) {
       return this.response(`Error restarting '${languageId}' language server: ${error}`);
@@ -945,9 +923,6 @@ export class Client {
     const serverConnection = this.connections.get(project);
     if (!serverConnection || !serverConnection.process.stdin) {
       return this.response(`Language server '${project}' is not running.`);
-    }
-    if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
-      await this.openProjectFiles(languageId, project, method);
     }
     try {
       return await serverConnection.connection.sendRequest(method, params);
@@ -1008,9 +983,6 @@ export class Client {
       WorkspaceSymbolRequest.method
     ];
     if (methods.includes(method)) {
-      if (!this.initializedProjects.has(project) || method === WorkspaceSymbolRequest.method) {
-        await this.openProjectFiles(languageId, project, method);
-      }
       return this.sendRequest(languageId, project, method, params);
     }
     return this.sendRequest(languageId, project, method, params);
@@ -1074,13 +1046,14 @@ export class Client {
       this.serverStartTimes.set(config.project.name, timer);
       this.setProcessHandlers(config.project.name, childProcess);
       await this.initializeServer(languageId, config.project.name);
+      const elapsed = Date.now() - timer;
       const message = `Successfully started '${languageId}' language server with '${config.project.name}' project.`;
       return this.response(message, false, {
         languageId,
         project: config.project.name,
         path: config.project.path,
         pid: childProcess.pid,
-        time: new Date(timer).toISOString()
+        time: `${elapsed}ms`
       });
     } catch (error) {
       return this.response(`Failed to start '${languageId}' language server: ${error}`);
