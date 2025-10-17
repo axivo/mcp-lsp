@@ -141,6 +141,16 @@
       "args": [
         "--stdio"
       ],
+      "configuration": {
+        "preferences": {
+          "includeInlayEnumMemberValueHints": true,
+          "includeInlayFunctionLikeReturnTypeHints": true,
+          "includeInlayFunctionParameterTypeHints": true,
+          "includeInlayParameterNameHints": "all",
+          "includeInlayPropertyDeclarationTypeHints": true,
+          "includeInlayVariableTypeHints": true
+        }
+      },
       "extensions": [
         ".js",
         ".ts"
