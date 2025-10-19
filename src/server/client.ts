@@ -16,6 +16,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import pLimit from 'p-limit';
 import {
+  CancellationTokenSource,
   createMessageConnection,
   MessageConnection,
   StreamMessageReader,
@@ -406,23 +407,47 @@ export class Client {
       rootUri: pathToFileURL(projectConfig.path).toString(),
       workspaceFolders
     };
-    const initializeResult: InitializeResult = await serverConnection.connection.sendRequest(InitializeRequest.method, initParams);
-    serverConnection.capabilities = initializeResult.capabilities;
-    serverConnection.connection.sendNotification(InitializedNotification.method, {});
-    await this.setFilesCache(project, projectConfig, serverConfig.extensions);
-    await this.initializeProject(languageId, project);
-    const projectFiles = this.projectFiles.get(project);
-    try {
-      if (projectFiles && projectFiles.length) {
-        await this.openFiles(languageId, project, projectFiles);
-        if (serverConfig.settings.workspace === true) {
-          const params = { query: this.query };
-          await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+    const tokenSource = new CancellationTokenSource();
+    const timeout = new Promise<InitializeResult>((_, reject) => {
+      setTimeout(() => {
+        tokenSource.cancel();
+        if (!serverConnection.process.killed) {
+          serverConnection.process.kill('SIGKILL');
         }
-        serverConnection.initialized = true;
+        this.initializedProjects.delete(project);
+        reject(new Error(`Initialization timed out after ${serverConfig.settings.timeoutMs}ms`));
+      }, serverConfig.settings.timeoutMs);
+    });
+    try {
+      const initializeResult = await Promise.race([
+        serverConnection.connection.sendRequest(
+          InitializeRequest.method,
+          initParams,
+          tokenSource.token
+        ).then(result => {
+          return result;
+        }),
+        timeout
+      ]) as InitializeResult;
+      serverConnection.capabilities = initializeResult.capabilities;
+      serverConnection.connection.sendNotification(InitializedNotification.method, {});
+      await this.setFilesCache(project, projectConfig, serverConfig.extensions);
+      await this.initializeProject(languageId, project);
+      const projectFiles = this.projectFiles.get(project);
+      try {
+        if (projectFiles && projectFiles.length) {
+          await this.openFiles(languageId, project, projectFiles);
+          if (serverConfig.settings.workspace === true) {
+            const params = { query: this.query };
+            await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+          }
+          serverConnection.initialized = true;
+        }
+      } catch (error) {
+        serverConnection.initialized = false;
       }
-    } catch (error) {
-      serverConnection.initialized = false;
+    } finally {
+      tokenSource.dispose();
     }
   }
 
@@ -869,6 +894,9 @@ export class Client {
         this.initializedProjects.delete(runningProject);
       }
       const response = await this.startServer(languageId, project);
+      if (!response.data) {
+        return response;
+      }
       const responseData = response.data as { path?: string; pid?: number };
       const elapsed = Date.now() - timer;
       const message = `Successfully restarted '${languageId}' language server with '${project}' project.`;
@@ -1082,7 +1110,9 @@ export class Client {
     const languageId = this.getLanguageId(project);
     if (languageId) {
       const serverConfig = this.config.getServerConfig(languageId);
-      await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
+      try {
+        await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
+      } catch (error) { }
       await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
       this.projectId.delete(languageId);
     }

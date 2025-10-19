@@ -79,8 +79,13 @@ A language server configuration has the following format:
         }
       ],
       "settings": {                                 # Optional language server settings
+        "maxConcurrentFileReads": 10,
         "messageRequest": false,
+        "rateLimitMaxRequests": 100,
+        "rateLimitWindowMs": 60000,
         "registrationRequest": false,
+        "shutdownGracePeriodMs": 100,
+        "timeoutMs": 600000,
         "workspace": false
       }
     }

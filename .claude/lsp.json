@@ -121,13 +121,7 @@
           "name": "ktor",
           "description": "Framework for quickly creating connected applications in Kotlin.",
           "url": "https://github.com/ktorio/ktor",
-          "path": "/Users/floren/github/ktor",
-          "patterns": {
-            "exclude": [
-              "**/build/**",
-              "**/.gradle/**"
-            ]
-          }
+          "path": "/Users/floren/github/ktor"
         }
       ]
     },
