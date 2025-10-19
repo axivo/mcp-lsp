@@ -744,7 +744,7 @@ export class McpTool {
       _meta: {
         usage: [
           'Place cursor on symbol usage or reference, not definition',
-          'Returns empty array when cursor is on the symbol definition itself'
+          'Returns empty array when cursor is placed on symbol definition'
         ]
       }
     };
