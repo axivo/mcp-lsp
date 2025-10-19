@@ -58,6 +58,7 @@ A language server configuration has the following format:
         "--stdio"
       ],
       "configuration": {},                          # Optional language server configuration
+      "env": {},                                    # Optional environment variables
       "extensions": [                               # Required language server extensions
         ".extension"
       ],
@@ -311,54 +312,59 @@ To start performing a code review, ask Claude to:
     - Inputs: `file_path`
     - Returns: Array of color values and their locations
 
-30. **`get_links`**
+30. **`get_diagnostics`**
+    - Get errors, warnings, and diagnostics from document
+    - Inputs: `file_path`
+    - Returns: Array of diagnostics with severity, message, and location
+
+31. **`get_links`**
     - Extract clickable links and references from document
     - Inputs: `file_path`
     - Returns: Array of document links and references
 
-31. **`get_link_resolves`**
+32. **`get_link_resolves`**
     - Resolve target URL for a document link item
     - Inputs: `file_path`, `item` (from get_links)
     - Returns: Resolved link target information
 
-32. **`get_semantic_tokens`**
+33. **`get_semantic_tokens`**
     - Extract detailed syntax tokens for advanced highlighting and analysis
     - Inputs: `file_path`
     - Returns: Semantic token data with types and modifiers
 
 ### Formatting & Editing Tools
 
-33. **`get_format`**
+34. **`get_format`**
     - Format entire document using language server rules
     - Inputs: `file_path`
     - Returns: Formatted document text with applied style rules
 
-34. **`get_range_format`**
+35. **`get_range_format`**
     - Format specific code range using language server rules
     - Inputs: `file_path`, `start_line`, `start_character`, `end_line`, `end_character`
     - Returns: Formatted range with style rules applied
 
-35. **`get_code_actions`**
+36. **`get_code_actions`**
     - Get automated code fixes and refactoring suggestions at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of available code actions and quick fixes
 
-36. **`get_code_resolves`**
+37. **`get_code_resolves`**
     - Resolve additional details for a code action item
     - Inputs: `file_path`, `item` (from get_code_actions)
     - Returns: Complete code action with workspace edits
 
-37. **`get_selection_range`**
+38. **`get_selection_range`**
     - Expand selection to logical code boundaries
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of expanded selection ranges
 
-38. **`get_linked_editing_range`**
+39. **`get_linked_editing_range`**
     - Find related ranges that should be edited simultaneously
     - Inputs: `file_path`, `line`, `character`
     - Returns: Linked editing ranges for synchronized updates
 
-39. **`get_symbol_renames`**
+40. **`get_symbol_renames`**
     - Preview all locations that would be renamed with symbol
     - Inputs: `file_path`, `line`, `character`, `new_name`
     - Returns: Workspace edit preview for symbol renaming

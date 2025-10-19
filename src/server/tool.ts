@@ -128,6 +128,28 @@ export class McpTool {
   }
 
   /**
+   * Creates MCP tool for document diagnostics extraction
+   * 
+   * Identifies errors, warnings, and info messages within documents
+   * for code quality analysis and validation feedback.
+   * 
+   * @returns {Tool} MCP tool definition for diagnostic discovery
+   */
+  getDiagnostics(): Tool {
+    return {
+      name: 'get_diagnostics',
+      description: 'Get errors, warnings, and info messages from document',
+      inputSchema: {
+        type: 'object',
+        properties: {
+          file_path: { type: 'string', description: 'Path to the project file' }
+        },
+        required: ['file_path']
+      }
+    };
+  }
+
+  /**
    * Creates MCP tool for code completions and IntelliSense
    * 
    * Provides context-aware auto-completion suggestions including symbols,
@@ -162,7 +184,7 @@ export class McpTool {
   getFoldingRanges(): Tool {
     return {
       name: 'get_folding_ranges',
-      description: 'Identify collapsible code sections for code editor folding',
+      description: 'Identify collapsible code sections for code editor folding from document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -575,7 +597,7 @@ export class McpTool {
   getSemanticTokens(): Tool {
     return {
       name: 'get_semantic_tokens',
-      description: 'Extract detailed syntax tokens for advanced highlighting and analysis',
+      description: 'Extract detailed syntax tokens for advanced highlighting and analysis from document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -817,7 +839,7 @@ export class McpTool {
   getSymbols(): Tool {
     return {
       name: 'get_symbols',
-      description: 'List all symbols in document',
+      description: 'List all symbols from document',
       inputSchema: {
         type: 'object',
         properties: {
@@ -844,6 +866,7 @@ export class McpTool {
       this.getCodeActions(),
       this.getCodeResolves(),
       this.getColors(),
+      this.getDiagnostics(),
       this.getCompletions(),
       this.getFoldingRanges(),
       this.getFormat(),

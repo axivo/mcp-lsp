@@ -103,6 +103,34 @@
         }
       }
     },
+    "kotlin": {
+      "command": "kotlin-lsp",
+      "args": [
+        "--stdio"
+      ],
+      "env": {
+        "JAVA_HOME": "/opt/homebrew/opt/openjdk/libexec/openjdk.jdk/Contents/Home",
+        "JAVA_TOOL_OPTIONS": "--enable-native-access=ALL-UNNAMED",
+        "MAVEN_HOME": "/opt/homebrew/opt/maven/libexec"
+      },
+      "extensions": [
+        ".kt"
+      ],
+      "projects": [
+        {
+          "name": "ktor",
+          "description": "Framework for quickly creating connected applications in Kotlin.",
+          "url": "https://github.com/ktorio/ktor",
+          "path": "/Users/floren/github/ktor",
+          "patterns": {
+            "exclude": [
+              "**/build/**",
+              "**/.gradle/**"
+            ]
+          }
+        }
+      ]
+    },
     "python": {
       "command": "pyright-langserver",
       "args": [

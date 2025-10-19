@@ -31,6 +31,7 @@ import {
   CompletionResolveRequest,
   DefinitionRequest,
   DocumentColorRequest,
+  DocumentDiagnosticRequest,
   DocumentFormattingRequest,
   DocumentHighlightRequest,
   DocumentLink,
@@ -118,6 +119,14 @@ interface GetCodeResolves extends Resolve {
  * @extends FilePath
  */
 interface GetColors extends FilePath { }
+
+/**
+ * Parameters for pull-based diagnostics requests
+ * 
+ * @interface GetDiagnostics
+ * @extends FilePath
+ */
+interface GetDiagnostics extends FilePath { }
 
 /**
  * Parameters for completion suggestions at cursor position
@@ -700,6 +709,7 @@ export class McpServer {
       { capability: 'codeActionProvider', handler: this.getCodeResolves.bind(this), tool: this.tool.getCodeResolves() },
       { capability: 'colorProvider', handler: this.getColors.bind(this), tool: this.tool.getColors() },
       { capability: 'completionProvider', handler: this.getCompletions.bind(this), tool: this.tool.getCompletions() },
+      { capability: 'diagnosticProvider', handler: this.getDiagnostics.bind(this), tool: this.tool.getDiagnostics() },
       { capability: 'foldingRangeProvider', handler: this.getFoldingRanges.bind(this), tool: this.tool.getFoldingRanges() },
       { capability: 'documentFormattingProvider', handler: this.getFormat.bind(this), tool: this.tool.getFormat() },
       { capability: 'documentHighlightProvider', handler: this.getHighlights.bind(this), tool: this.tool.getHighlights() },
@@ -950,6 +960,24 @@ export class McpServer {
       textDocument: { uri: `file://${args.file_path}` }
     };
     return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+  }
+
+  /**
+   * Extracts diagnostics from document
+   * 
+   * Identifies errors, warnings, and info messages for code quality
+   * analysis and validation feedback.
+   * 
+   * @param {GetDiagnostics} args - File path for diagnostic extraction
+   * @returns {Promise<Diagnostic[] | string>} Array of diagnostics or error message
+   */
+  async getDiagnostics(args: GetDiagnostics): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentDiagnosticRequest.method, params);
   }
 
   /**
