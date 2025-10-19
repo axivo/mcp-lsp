@@ -8,6 +8,7 @@
 
 import { deepmerge } from 'deepmerge-ts';
 import fg from 'fast-glob';
+import find, { ProcessInfo } from 'find-process';
 import gracefulFs from 'graceful-fs';
 import { ChildProcess, spawn } from 'node:child_process';
 import { dirname, isAbsolute, join } from 'node:path';
@@ -860,9 +861,6 @@ export class Client {
     if ('content' in result) {
       return result;
     }
-    if (!this.projectId.has(languageId)) {
-      return this.response(`Language server '${languageId}' is not running.`);
-    }
     try {
       const timer = Date.now();
       const runningProject = this.projectId.get(languageId);
@@ -1026,9 +1024,15 @@ export class Client {
     }
     try {
       const timer = Date.now();
+      const processes = await (find as unknown as {
+        default: (by: string, value: string) => Promise<ProcessInfo[]>
+      }).default('name', config.server.command);
+      processes.forEach((proc: ProcessInfo) => {
+        process.kill(proc.pid, 'SIGTERM');
+      });
       const childProcess = spawn(config.server.command, config.server.args, {
         cwd: config.project.path,
-        env: { ...process.env },
+        env: { ...process.env, ...config.server.env },
         stdio: ['pipe', 'pipe', 'pipe']
       });
       if (!childProcess.stdout || !childProcess.stdin || !childProcess.stderr) {

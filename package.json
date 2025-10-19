@@ -30,9 +30,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.17.0",
+    "@modelcontextprotocol/sdk": "^1.20.0",
     "deepmerge-ts": "^7.1.0",
     "fast-glob": "^3.3.0",
+    "find-process": "^2.0.0",
     "graceful-fs": "^4.2.0",
     "p-limit": "^7.1.0",
     "vscode-jsonrpc": "^8.2.0",

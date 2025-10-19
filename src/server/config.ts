@@ -50,6 +50,7 @@ export interface ProjectConfig {
  * @property {Partial<ClientCapabilities>} [capabilities] - Optional LSP client capability overrides
  * @property {string} command - Executable command to start language server
  * @property {Record<string, unknown>} [configuration] - Optional server-specific configuration
+ * @property {Record<string, string>} [env] - Optional environment settings
  * @property {string[]} extensions - File extensions handled by this server
  * @property {ProjectConfig[]} projects - Array of projects using this language server
  * @property {object} [settings] - Optional runtime behavior settings
@@ -59,6 +60,7 @@ export interface ServerConfig {
   capabilities?: Partial<ClientCapabilities>;
   command: string;
   configuration?: Record<string, unknown>;
+  env?: Record<string, string>;
   extensions: string[];
   projects: ProjectConfig[];
   settings?: {
@@ -151,13 +153,18 @@ export class Config {
       if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
         return false;
       }
-      if (serverConfig.capabilities !== undefined) {
-        if (typeof serverConfig.capabilities !== 'object' || serverConfig.capabilities === null || Array.isArray(serverConfig.capabilities)) {
-          return false;
-        }
+      if (serverConfig.capabilities !== undefined &&
+        (typeof serverConfig.capabilities !== 'object' || serverConfig.capabilities === null || Array.isArray(serverConfig.capabilities))
+      ) {
+        return false;
       }
       if (serverConfig.configuration !== undefined &&
         (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))
+      ) {
+        return false;
+      }
+      if (serverConfig.env !== undefined &&
+        (typeof serverConfig.env !== 'object' || serverConfig.env === null || Array.isArray(serverConfig.env))
       ) {
         return false;
       }
@@ -235,6 +242,7 @@ export class Config {
    *   capabilities?: Partial<ClientCapabilities>,
    *   command: string,
    *   configuration?: Record<string, unknown>,
+   *   env?: Record<string, string>,
    *   extensions: string[],
    *   projects: ProjectConfig[],
    *   settings: {
@@ -253,6 +261,7 @@ export class Config {
     capabilities?: Partial<ClientCapabilities>;
     command: string;
     configuration?: Record<string, unknown>;
+    env?: Record<string, string>;
     extensions: string[];
     projects: ProjectConfig[];
     settings: {
@@ -270,6 +279,8 @@ export class Config {
       return {
         args: [],
         command: '',
+        configuration: undefined,
+        env: undefined,
         extensions: [],
         projects: [],
         settings: {
@@ -280,8 +291,7 @@ export class Config {
           registrationRequest: true,
           shutdownGracePeriodMs: 100,
           workspace: true
-        },
-        configuration: undefined
+        }
       };
     }
     return {
@@ -289,6 +299,7 @@ export class Config {
       capabilities: serverConfig.capabilities,
       command: serverConfig.command,
       configuration: serverConfig.configuration,
+      env: serverConfig.env,
       extensions: serverConfig.extensions,
       projects: serverConfig.projects,
       settings: {
