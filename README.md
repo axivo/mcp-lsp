@@ -226,177 +226,172 @@ To start performing a code review, ask Claude to:
    - Inputs: `language_id`, `project`, `limit` (optional), `offset` (optional)
    - Returns: Paginated list of project files with paths
 
-8. **`load_project_files`**
-   - Load all project files into language server for full workspace analysis
-   - Inputs: `language_id`, `project`, `timeout` (optional)
-   - Returns: Loading confirmation with timing information
-
-9. **`get_project_symbols`**
+8. **`get_project_symbols`**
    - Search for symbols across entire project workspace with pagination
    - Inputs: `language_id`, `project`, `query`, `limit` (optional), `offset` (optional), `timeout` (optional)
    - Returns: Paginated workspace symbol search results
 
 ### Code Analysis Tools
 
-10. **`get_hover`**
+9. **`get_hover`**
     - Show type information and documentation at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Type information, documentation, and contextual details
 
-11. **`get_symbol_definitions`**
+10. **`get_symbol_definitions`**
     - Navigate to where symbol is originally defined
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of definition locations with file paths and positions
 
-12. **`get_symbol_references`**
+11. **`get_symbol_references`**
     - Find all locations where symbol is used or referenced
     - Inputs: `file_path`, `line`, `character`, `include_declaration` (optional)
     - Returns: Array of reference locations throughout workspace
 
-13. **`get_implementations`**
+12. **`get_implementations`**
     - Find all locations where interface or abstract method is implemented
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of concrete implementation locations
 
-14. **`get_type_definitions`**
+13. **`get_type_definitions`**
     - Navigate to where symbol type is defined
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of type definition locations
 
 ### Navigation Tools
 
-15. **`get_call_hierarchy`**
+14. **`get_call_hierarchy`**
     - Build call hierarchy showing caller and callee relationships
     - Inputs: `file_path`, `line`, `character`
     - Returns: Call hierarchy preparation data
 
-16. **`get_incoming_calls`**
+15. **`get_incoming_calls`**
     - Show all functions that call this symbol
     - Inputs: `item` (from get_call_hierarchy)
     - Returns: Array of incoming call relationships
 
-17. **`get_outgoing_calls`**
+16. **`get_outgoing_calls`**
     - Show all functions that this symbol calls
     - Inputs: `item` (from get_call_hierarchy)
     - Returns: Array of outgoing call relationships
 
-18. **`get_type_hierarchy`**
+17. **`get_type_hierarchy`**
     - Build type hierarchy showing inheritance relationships
     - Inputs: `file_path`, `line`, `character`
     - Returns: Type hierarchy preparation data
 
-19. **`get_supertypes`**
+18. **`get_supertypes`**
     - Find all parent types that this type inherits from
     - Inputs: `item` (from get_type_hierarchy)
     - Returns: Array of parent type items
 
-20. **`get_subtypes`**
+19. **`get_subtypes`**
     - Find all subtypes that inherit from this type
     - Inputs: `item` (from get_type_hierarchy)
     - Returns: Array of derived type items
 
 ### Code Intelligence Tools
 
-21. **`get_completions`**
+20. **`get_completions`**
     - Get completions and auto-suggestions at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of completion suggestions with documentation
 
-22. **`get_resolves`**
+21. **`get_resolves`**
     - Resolve additional details for a completion item
     - Inputs: `file_path`, `item` (from get_completions)
     - Returns: Extended completion information and documentation
 
-23. **`get_signature`**
+22. **`get_signature`**
     - Show function parameters and signature help at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Function signature information and parameter details
 
-24. **`get_inlay_hints`**
+23. **`get_inlay_hints`**
     - Show inline type annotations and parameter hints in code range
     - Inputs: `file_path`, `start_line`, `start_character`, `end_line`, `end_character`
     - Returns: Array of inline type hints and annotations
 
-25. **`get_inlay_hint`**
+24. **`get_inlay_hint`**
     - Resolve additional details for an inlay hint item
     - Inputs: `file_path`, `item` (from get_inlay_hints)
     - Returns: Extended inlay hint information
 
 ### Document Tools
 
-26. **`get_symbols`**
+25. **`get_symbols`**
     - List all symbols in document with pagination
     - Inputs: `file_path`, `limit` (optional), `offset` (optional)
     - Returns: Paginated document outline with functions, classes, variables
 
-27. **`get_highlights`**
+26. **`get_highlights`**
     - Highlight all occurrences of symbol at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of symbol highlight ranges
 
-28. **`get_folding_ranges`**
+27. **`get_folding_ranges`**
     - Identify collapsible code sections for code editor folding
     - Inputs: `file_path`
     - Returns: Array of foldable code ranges
 
-29. **`get_colors`**
+28. **`get_colors`**
     - Extract color definitions and references from document
     - Inputs: `file_path`
     - Returns: Array of color values and their locations
 
-30. **`get_diagnostics`**
+29. **`get_diagnostics`**
     - Get errors, warnings, and diagnostics from document
     - Inputs: `file_path`
     - Returns: Array of diagnostics with severity, message, and location
 
-31. **`get_links`**
+30. **`get_links`**
     - Extract clickable links and references from document
     - Inputs: `file_path`
     - Returns: Array of document links and references
 
-32. **`get_link_resolves`**
+31. **`get_link_resolves`**
     - Resolve target URL for a document link item
     - Inputs: `file_path`, `item` (from get_links)
     - Returns: Resolved link target information
 
-33. **`get_semantic_tokens`**
+32. **`get_semantic_tokens`**
     - Extract detailed syntax tokens for advanced highlighting and analysis
     - Inputs: `file_path`
     - Returns: Semantic token data with types and modifiers
 
 ### Formatting & Editing Tools
 
-34. **`get_format`**
+33. **`get_format`**
     - Format entire document using language server rules
     - Inputs: `file_path`
     - Returns: Formatted document text with applied style rules
 
-35. **`get_range_format`**
+34. **`get_range_format`**
     - Format specific code range using language server rules
     - Inputs: `file_path`, `start_line`, `start_character`, `end_line`, `end_character`
     - Returns: Formatted range with style rules applied
 
-36. **`get_code_actions`**
+35. **`get_code_actions`**
     - Get automated code fixes and refactoring suggestions at cursor position
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of available code actions and quick fixes
 
-37. **`get_code_resolves`**
+36. **`get_code_resolves`**
     - Resolve additional details for a code action item
     - Inputs: `file_path`, `item` (from get_code_actions)
     - Returns: Complete code action with workspace edits
 
-38. **`get_selection_range`**
+37. **`get_selection_range`**
     - Expand selection to logical code boundaries
     - Inputs: `file_path`, `line`, `character`
     - Returns: Array of expanded selection ranges
 
-39. **`get_linked_editing_range`**
+38. **`get_linked_editing_range`**
     - Find related ranges that should be edited simultaneously
     - Inputs: `file_path`, `line`, `character`
     - Returns: Linked editing ranges for synchronized updates
 
-40. **`get_symbol_renames`**
+39. **`get_symbol_renames`**
     - Preview all locations that would be renamed with symbol
     - Inputs: `file_path`, `line`, `character`, `new_name`
     - Returns: Workspace edit preview for symbol renaming
