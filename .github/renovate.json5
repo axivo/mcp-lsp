@@ -1,0 +1,55 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "assignees": [
+    "fmunteanu"
+  ],
+  "customManagers": [
+    {
+      "customType": "regex",
+      "datasourceTemplate": "node-version",
+      "depNameTemplate": "node",
+      "managerFilePatterns": [
+        ".github/workflows/package.yml"
+      ],
+      "matchStrings": [
+        "with:[\\s\\r]+?node-version:\\s+(?<currentValue>.+)"
+      ],
+      "versioningTemplate": "node"
+    }
+  ],
+  "excludeCommitPaths": [
+    "node_modules/**"
+  ],
+  "extends": [
+    ":semanticCommitTypeAll(chore)",
+    "config:recommended"
+  ],
+  "labels": [
+    "dependency"
+  ],
+  "packageRules": [
+    {
+      "enabled": false,
+      "matchFileNames": [
+        "package-lock.json"
+      ]
+    },
+    {
+      "enabled": true,
+      "matchDatasources": [
+        "node-version"
+      ],
+      "matchDepNames": [
+        "node"
+      ],
+      "matchUpdateTypes": [
+        "major"
+      ]
+    }
+  ],
+  "prConcurrentLimit": 0,
+  "prHourlyLimit": 0,
+  "semanticCommits": "enabled",
+  "separateMajorMinor": false,
+  "separateMinorPatch": false
+}
