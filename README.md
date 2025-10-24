@@ -12,7 +12,7 @@ A comprehensive MCP (Model Context Protocol) server that bridges Language Server
 
 ### Core Capabilities
 
-- **Multi-Language Support**: TypeScript, Python, Go, Ansible, Helm, and more through configurable LSP servers
+- **Multi-Language Support**: Kotlin, TypeScript, Python, Go, Helm, and more through configurable LSP servers
 - **Intelligent Code Analysis**: Symbol definitions, references, implementations, and type hierarchies
 - **Advanced Navigation**: Call hierarchies, document symbols, and workspace-wide symbol search
 - **Code Intelligence**: Hover information, completions, signature help, and inlay hints
@@ -127,23 +127,6 @@ These settings control LSP protocol behavior and server compatibility:
 
 File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot starting, `bin`, `build`, `cache`, `coverage`, `dist`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tmp`, and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
 
-## Multiple Language Servers Usage
-
-Run multiple language servers simultaneously to analyze different projects:
-
-```
-✅ ansible (k3s-cluster) + typescript (k3s-cluster-actions)
-✅ go (helm) + kotlin (ktor) + python (fastapi)
-```
-
-A language server can run only **one project at a time**:
-
-```
-❌ typescript (mcp-lsp) + typescript (typescript-sdk)
-```
-
-To switch projects, restart the language server with the desired project name.
-
 ## MCP Server Configuration
 
 Add to your `mcp.json` MCP servers configuration:
@@ -167,10 +150,26 @@ Add to your `mcp.json` MCP servers configuration:
 
 ### Environment Variables
 
-**Required:**
 - `LSP_FILE_PATH` - Absolute path to your LSP server configuration JSON file
 
-## Usage
+## Multiple Language Servers Usage
+
+Run multiple language servers simultaneously to analyze different projects:
+
+```
+✅ ansible (k3s-cluster) + typescript (k3s-cluster-actions)
+✅ go (helm) + kotlin (ktor) + python (fastapi)
+```
+
+A language server can run only **one project at a time**:
+
+```
+❌ typescript (mcp-lsp) + typescript (typescript-sdk)
+```
+
+To switch projects, restart the language server with the desired project name.
+
+## Getting Started
 
 You can ask Claude to explain how the LSP tools work:
 
@@ -185,6 +184,10 @@ To start performing a code review, ask Claude to:
 
 > [!NOTE]
 > Language server start time varies by language and project size, typically few seconds for a project with thousands of files. Some language servers like `Kotlin` may take several minutes to initialize large projects. Increase `timeoutMs` value accordingly, if default timeout is reached.
+
+### Claude's Review
+
+A [public session](https://claude.ai/share/cf7c67d3-64d1-4c56-8a29-e55234ebbcd5) demonstrates LSP tool capabilities and explains how semantic analysis provides compiler-accurate understanding compared to traditional text-based search methods.
 
 ## MCP Tools
 
