@@ -1,0 +1,59 @@
+{
+  "name": "@axivo/mcp-lsp",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "MCP server for Language Server Protocol integration",
+  "keywords": [
+    "code-intelligence",
+    "lsp",
+    "language-server-protocol",
+    "mcp",
+    "model-context-protocol",
+    "server"
+  ],
+  "license": "BSD-3-Clause",
+  "author": "AXIVO",
+  "files": [
+    "dist/**/*",
+    "LICENSE",
+    "README.md"
+  ],
+  "bin": {
+    "mcp-lsp": "dist/index.js"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/axivo/mcp-lsp.git"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.20.0",
+    "deepmerge-ts": "^7.1.0",
+    "fast-glob": "^3.3.0",
+    "find-process": "^2.0.0",
+    "graceful-fs": "^4.2.0",
+    "p-limit": "^7.1.0",
+    "vscode-jsonrpc": "^8.2.0",
+    "vscode-languageserver-protocol": "^3.17.0",
+    "zod": "^4.1.0"
+  },
+  "devDependencies": {
+    "@types/graceful-fs": "^4.1.0",
+    "@types/node": "^24.0.0",
+    "typescript": ">=5.0.0"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "index.js",
+  "bugs": {
+    "url": "https://github.com/axivo/mcp-lsp/issues"
+  },
+  "homepage": "https://github.com/axivo/mcp-lsp"
+}
