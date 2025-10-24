@@ -187,7 +187,7 @@ To start performing a code review, ask Claude to:
 
 ### Claude's Review
 
-A [public session](https://claude.ai/share/cf7c67d3-64d1-4c56-8a29-e55234ebbcd5) demonstrates LSP tool capabilities and explains how semantic analysis provides compiler-accurate understanding compared to traditional text-based search methods.
+A [public session](https://claude.ai/share/cf7c67d3-64d1-4c56-8a29-e55234ebbcd5) using the [DEVELOPER](https://github.com/axivo/claude) profile demonstrates LSP tool capabilities and explains how semantic analysis provides compiler-accurate understanding compared to traditional text-based search methods.
 
 ## MCP Tools
 
