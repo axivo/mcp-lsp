@@ -29,23 +29,18 @@ A comprehensive MCP (Model Context Protocol) server that bridges Language Server
 
 ### Prerequisites
 
-The MCP server foundation is built on battle-tested `vscode-jsonrpc` and `vscode-languageserver-protocol` libraries, providing compatibility with all VSCode [language servers](https://microsoft.github.io/language-server-protocol/implementors/servers/). Example installation for TypeScript language server:
+The MCP server foundation is built on battle-tested `vscode-jsonrpc` and `vscode-languageserver-protocol` libraries, providing compatibility with all VSCode [language servers](https://microsoft.github.io/language-server-protocol/implementors/servers/). Example installation for [`Kotlin`](https://github.com/Kotlin/kotlin-lsp) language server:
 
 ```bash
-brew install typescript-language-server
+brew install JetBrains/utils/kotlin-lsp
 ```
-
-Alternatively, use the `npm` package installer:
-
-```bash
-npm install -g typescript-language-server
-```
-
-Refer to the related [language server](https://microsoft.github.io/language-server-protocol/implementors/servers/) repository for additional installation details.
 
 ### Configuration File
 
-Create an MCP server configuration file, defining your language servers and projects. A [`lsp.json`](.claude/lsp.json) sample with popular development languages and multiple projects is provided as a starter guide.
+Create an MCP server configuration file, defining your language servers and projects.
+
+> [!NOTE]
+> A [`lsp.json`](.claude/lsp.json) configuration sample with popular development languages and multiple projects is provided as a starter guide.
 
 A language server configuration has the following format:
 
@@ -70,10 +65,12 @@ A language server configuration has the following format:
           "path": "/Users/username/github/project"  # Required project local path
           "patterns": {                             # Optional exclude or include patterns
             "exclude": [
+              "**/directory",
               "**/file.extension"
             ],
             "include": [
-              "**/dist"
+              "**/directory",
+              "**/file.extension"
             ],
           }
         }
@@ -95,9 +92,9 @@ A language server configuration has the following format:
 
 #### Optional Language Server Configuration
 
-Language servers often require specific configuration to function optimally. Configuration requirements are documented in each server's [official repository](https://microsoft.github.io/language-server-protocol/implementors/servers/). 
+Language servers often require a specific configuration to function optimally. Configuration requirements are documented in each server's [official repository](https://microsoft.github.io/language-server-protocol/implementors/servers/). 
 
-For example, `pyright` requires the following settings:
+For example, `pyright-langserver` requires the following settings:
 
 ```json
 "configuration": {
@@ -116,13 +113,35 @@ For example, `pyright` requires the following settings:
 
 These settings control LSP protocol behavior and server compatibility:
 
+- `maxConcurrentFileReads` - maximum number of files to read concurrently when opening project files, controls memory usage and performance during project initialization (default: `10`)
 - `messageRequest` - controls whether the language server can send `window/showMessage` requests to display user dialogs, disable for headless operation or automated environments (default: `true`)
+- `rateLimitMaxRequests` - maximum number of requests allowed per rate limit window, prevents overwhelming the language server with too many concurrent requests (default: `100`)
+- `rateLimitWindowMs` - time window in milliseconds for rate limiting, requests are counted within this sliding window (default: `60000` - 1 minute)
 - `registrationRequest` - controls whether the language server can send `client/registerCapability` requests to dynamically register capabilities, disable for servers that ignore client capability declarations (default: `true`)
+- `shutdownGracePeriodMs` - time in milliseconds to wait after sending shutdown request before forcing process termination, allows language server to complete cleanup operations (default: `100`)
+- `timeoutMs` - maximum time in milliseconds to wait for language server initialization, prevents hanging on unresponsive servers (default: `600000` - 10 minutes)
 - `workspace` - controls whether the language server initialization sends `workspace/symbol` requests to test workspace capabilities, disable for servers that don't support workspace operations or cause initialization failures (default: `true`)
 
 #### Optional Language Server Project File Patterns
 
 File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot starting, `bin`, `build`, `cache`, `coverage`, `dist`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tmp`, and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
+
+## Multiple Language Servers Usage
+
+Run multiple language servers simultaneously to analyze different projects:
+
+```
+✅ ansible (k3s-cluster) + typescript (k3s-cluster-actions)
+✅ go (helm) + kotlin (ktor) + python (fastapi)
+```
+
+A language server can run only **one project at a time**:
+
+```
+❌ typescript (mcp-lsp) + typescript (typescript-sdk)
+```
+
+To switch projects, restart the language server with the desired project name.
 
 ## MCP Server Configuration
 
@@ -152,11 +171,19 @@ Add to your `mcp.json` MCP servers configuration:
 
 ## Usage
 
+You can ask Claude to explain how the LSP tools work:
+
+- *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
+- *Please explain how LSP tools help you understand and review source code.*
+
 To start performing a code review, ask Claude to:
 
-- "*Start the TypeScript language server for the `typescript-sdk` project and check the server capabilities.*"
-- "*Next, load the project files and see the project files you can work with, prior any code review.*"
-- "*Next, perform a detailed review of project source code using the LSP tools and let me know your findings.*"
+- *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
+- *Next, see the project files you can work with, prior any code review.*
+- *Next, perform a detailed review of project source code using the LSP tools and let me know your findings.*
+
+> [!NOTE]
+> Language server start time varies by language and project size, typically few seconds for a project with thousands of files. Some language servers like `Kotlin` may take several minutes to initialize large projects. Increase `timeoutMs` value accordingly, if default timeout is reached.
 
 ## MCP Tools
 
