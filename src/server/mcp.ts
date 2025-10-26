@@ -620,6 +620,853 @@ export class McpServer {
   }
 
   /**
+   * Generates capability-based tools map for MCP tool exposure
+   * 
+   * Maps LSP server capabilities to available MCP tools, creating a dynamic
+   * tool registry based on what the current language server actually supports.
+   * 
+   * @private
+   * @param {ServerCapabilities} capabilities - LSP server capabilities from initialization
+   * @param {ToolCapabilities[]} toolCapabilities - Available tool-to-capability mappings
+   * @returns {Record<string, SupportedTools>} Capability-keyed mapping of supported tools
+   */
+  private generateToolsMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
+    const server = new Map<string, Tool[]>();
+    const toolsMap: Record<string, SupportedTools> = {};
+    for (const { tool, capability } of toolCapabilities) {
+      if (!server.has(capability)) {
+        server.set(capability, []);
+      }
+      server.get(capability)!.push(tool);
+    }
+    for (const [capability, value] of Object.entries(capabilities)) {
+      if (value) {
+        if (server.has(capability)) {
+          const tools = server.get(capability)!;
+          toolsMap[capability] = { supported: true, tools };
+        } else {
+          toolsMap[capability] = { supported: false, tools: [] };
+        }
+      }
+    }
+    const serverOperations = server.get('serverOperations');
+    if (serverOperations && serverOperations.length) {
+      toolsMap['serverOperations'] = { supported: true, tools: serverOperations };
+    }
+    return toolsMap;
+  }
+
+  /**
+   * Prepares call hierarchy for symbol at cursor position
+   * 
+   * Initiates call hierarchy analysis to enable caller/callee relationship exploration.
+   * 
+   * @private
+   * @param {GetCallHierarchy} args - Position and file context for hierarchy preparation
+   * @returns {Promise<CallHierarchyItem[] | string>} Array of call hierarchy items or error message
+   */
+  private async getCallHierarchy(args: GetCallHierarchy): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: CallHierarchyPrepareParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
+  }
+
+  /**
+   * Retrieves code actions and quick fixes at cursor position
+   * 
+   * Requests automated refactoring suggestions, error fixes, and code improvements
+   * from language server diagnostics.
+   * 
+   * @private
+   * @param {GetCodeActions} args - Position and file context for code action discovery
+   * @returns {Promise<CodeAction[] | string>} Array of available code actions or error message
+   */
+  private async getCodeActions(args: GetCodeActions): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: CodeActionParams = {
+      context: { diagnostics: [] },
+      range: {
+        start: { character: args.character, line: args.line },
+        end: { character: args.character, line: args.line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
+  }
+
+  /**
+   * Resolves additional details for a code action item
+   * 
+   * Fetches complete edit operations, command details, and workspace changes
+   * for a previously retrieved code action.
+   * 
+   * @private
+   * @param {GetCodeResolves} args - File context and code action item to resolve
+   * @returns {Promise<CodeAction | string>} Resolved code action with full details or error message
+   */
+  private async getCodeResolves(args: GetCodeResolves): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'item']);
+    if (error) return error;
+    return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
+  }
+
+  /**
+   * Extracts color definitions and references from document
+   * 
+   * Identifies color values (hex, rgb, hsl) and their locations for color picker integration.
+   * 
+   * @private
+   * @param {GetColors} args - File path for color extraction
+   * @returns {Promise<ColorInformation[] | string>} Array of color information or error message
+   */
+  private async getColors(args: GetColors): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
+  }
+
+  /**
+   * Retrieves code completions and IntelliSense suggestions at cursor position
+   * 
+   * Provides context-aware code completion including symbols, keywords, snippets,
+   * and documentation for enhanced developer productivity.
+   * 
+   * @private
+   * @param {GetCompletions} args - Position and file context for completion discovery
+   * @returns {Promise<CompletionItem[] | string>} Array of completion suggestions or error message
+   */
+  private async getCompletions(args: GetCompletions): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+  }
+
+  /**
+   * Extracts diagnostics from document
+   * 
+   * Identifies errors, warnings, and info messages for code quality
+   * analysis and validation feedback.
+   * 
+   * @private
+   * @param {GetDiagnostics} args - File path for diagnostic extraction
+   * @returns {Promise<Diagnostic[] | string>} Array of diagnostics or error message
+   */
+  private async getDiagnostics(args: GetDiagnostics): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentDiagnosticRequest.method, params);
+  }
+
+  /**
+   * Identifies collapsible code sections for editor folding
+   * 
+   * Analyzes document structure to find foldable regions like functions,
+   * classes, blocks, and comments for improved code navigation.
+   * 
+   * @private
+   * @param {GetFoldingRanges} args - File path for folding range analysis
+   * @returns {Promise<FoldingRange[] | string>} Array of foldable ranges or error message
+   */
+  private async getFoldingRanges(args: GetFoldingRanges): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
+  }
+
+  /**
+   * Formats entire document according to language server style rules
+   * 
+   * Applies consistent formatting using configured style guidelines including
+   * indentation, spacing, and language-specific formatting conventions.
+   * 
+   * @private
+   * @param {GetFormat} args - File path for document formatting
+   * @returns {Promise<TextEdit[] | string>} Array of text edits for formatting or error message
+   */
+  private async getFormat(args: GetFormat): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      options: { tabSize: 2, insertSpaces: true },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
+  }
+
+  /**
+   * Highlights all occurrences of symbol at cursor position
+   * 
+   * Finds and highlights all references to the symbol under cursor
+   * for visual identification and navigation assistance.
+   * 
+   * @private
+   * @param {GetHighlights} args - Position and file context for symbol highlighting
+   * @returns {Promise<DocumentHighlight[] | string>} Array of highlight ranges or error message
+   */
+  private async getHighlights(args: GetHighlights): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentHighlightRequest.method, params);
+  }
+
+  /**
+   * Retrieves hover information and documentation at cursor position
+   * 
+   * Provides type information, documentation, and contextual details
+   * for symbols, functions, and variables under the cursor.
+   * 
+   * @private
+   * @param {GetHover} args - Position and file context for hover information
+   * @returns {Promise<Hover | string>} Hover content with documentation or error message
+   */
+  private async getHover(args: GetHover): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
+  }
+
+  /**
+   * Finds all implementations of interface or abstract method at cursor
+   * 
+   * Locates concrete implementations of abstract methods, interface methods,
+   * or virtual functions for navigation and analysis.
+   * 
+   * @private
+   * @param {GetImplementations} args - Position and file context for implementation search
+   * @returns {Promise<Location[] | string>} Array of implementation locations or error message
+   */
+  private async getImplementations(args: GetImplementations): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'character', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
+  }
+
+  /**
+   * Retrieves all functions that call the specified symbol
+   * 
+   * Analyzes call hierarchy to find all callers of a function or method,
+   * enabling reverse dependency analysis and code navigation.
+   * 
+   * @private
+   * @param {GetIncomingCalls} args - Call hierarchy item to find callers for
+   * @returns {Promise<CallHierarchyIncomingCall[] | string>} Array of incoming calls or error message
+   */
+  private async getIncomingCalls(args: GetIncomingCalls): Promise<unknown> {
+    const error = this.validate(args, ['item']);
+    if (error) return error;
+    const params: CallHierarchyIncomingCallsParams = {
+      item: args.item
+    };
+    const filePath = this.setFilePath(args.item);
+    return await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
+  }
+
+  /**
+   * Resolves additional details for an inlay hint item
+   * 
+   * Fetches complete information for inlay hints including tooltips,
+   * click actions, and extended documentation.
+   * 
+   * @private
+   * @param {GetInlayHint} args - File context and inlay hint item to resolve
+   * @returns {Promise<InlayHint | string>} Resolved inlay hint with full details or error message
+   */
+  private async getInlayHint(args: GetInlayHint): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'item']);
+    if (error) return error;
+    return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
+  }
+
+  /**
+   * Retrieves inline type annotations and parameter hints for code range
+   * 
+   * Provides visual type hints, parameter names, and return types
+   * directly in the editor for improved code readability.
+   * 
+   * @private
+   * @param {GetInlayHints} args - Range and file context for hint analysis
+   * @returns {Promise<InlayHint[] | string>} Array of inlay hints or error message
+   */
+  private async getInlayHints(args: GetInlayHints): Promise<unknown> {
+    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
+    if (error) return error;
+    const params: InlayHintParams = {
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
+  }
+
+  /**
+   * Finds related ranges that should be edited simultaneously
+   * 
+   * Identifies linked editing ranges where changes to one location
+   * should automatically apply to related locations (e.g., HTML tag pairs).
+   * 
+   * @private
+   * @param {GetLinkedEditingRange} args - Position and file context for linked range discovery
+   * @returns {Promise<LinkedEditingRanges | string>} Linked editing ranges or error message
+   */
+  private async getLinkedEditingRange(args: GetLinkedEditingRange): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: LinkedEditingRangeParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
+  }
+
+  /**
+   * Resolves target URL for a document link item
+   * 
+   * Fetches the actual target URL for clickable links within documents,
+   * enabling navigation to external resources and file references.
+   * 
+   * @private
+   * @param {GetLinkResolves} args - File context and document link item to resolve
+   * @returns {Promise<DocumentLink | string>} Resolved document link with target or error message
+   */
+  private async getLinkResolves(args: GetLinkResolves): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'item']);
+    if (error) return error;
+    return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
+  }
+
+  /**
+   * Extracts clickable links and references from document
+   * 
+   * Scans document for URLs, file references, and other clickable links
+   * that can be navigated or opened in external applications.
+   * 
+   * @private
+   * @param {GetLinks} args - File path for link extraction
+   * @returns {Promise<DocumentLink[] | string>} Array of document links or error message
+   */
+  private async getLinks(args: GetLinks): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
+  }
+
+  /**
+   * Retrieves all functions called by the specified symbol
+   * 
+   * Analyzes call hierarchy to find all functions or methods called
+   * from the current symbol, enabling dependency analysis.
+   * 
+   * @private
+   * @param {GetOutgoingCalls} args - Call hierarchy item to find callees for
+   * @returns {Promise<CallHierarchyOutgoingCall[] | string>} Array of outgoing calls or error message
+   */
+  private async getOutgoingCalls(args: GetOutgoingCalls): Promise<unknown> {
+    const error = this.validate(args, ['item']);
+    if (error) return error;
+    const params: CallHierarchyOutgoingCallsParams = {
+      item: args.item
+    };
+    const filePath = this.setFilePath(args.item);
+    return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
+  }
+
+  /**
+   * Lists all files in the project workspace with pagination
+   * 
+   * Retrieves cached project files discovered during server initialization,
+   * with pagination support for large codebases and project path information.
+   * 
+   * @private
+   * @param {GetProjectFiles} args - Project identification and pagination parameters
+   * @returns {Promise<{data: {files: string[], path: string}, pagination: PageMetadata} | string>} Paginated file listing or error message
+   */
+  private async getProjectFiles(args: GetProjectFiles): Promise<unknown> {
+    const error = this.validate(args, ['language_id', 'project']);
+    if (error) return error;
+    if (args.project !== this.client.getProjectId(args.language_id)) {
+      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projectConfig = serverConfig.projects.find(id => id.name === args.project) as { name: string, path: string };
+    const files = await this.client.getProjectFiles(args.language_id, args.project);
+    if (!files) {
+      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
+    }
+    const description = `Showing files for '${args.project}' project.`;
+    return this.paginatedResponse(files, args, description, {
+      language_id: args.language_id,
+      project: args.project,
+      path: projectConfig.path
+    });
+  }
+
+  /**
+   * Searches for symbols across entire project workspace with pagination
+   * 
+   * Performs project-wide symbol search using workspace symbol provider,
+   * with pagination support for large result sets and comprehensive metadata.
+   * 
+   * @private
+   * @param {GetProjectSymbols} args - Project identification and search parameters
+   * @returns {Promise<{data: {symbols: WorkspaceSymbol[]}, pagination: PageMetadata} | string>} Paginated symbol results or error message
+   */
+  private async getProjectSymbols(args: GetProjectSymbols): Promise<unknown> {
+    const error = this.validate(args, ['language_id', 'project', 'query']);
+    if (error) return error;
+    const timer = Date.now();
+    if (args.project !== this.client.getProjectId(args.language_id)) {
+      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
+    }
+    await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
+    const params: WorkspaceSymbolParams = { query: args.query ?? this.query };
+    const result = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
+    if (typeof result === 'string' || !Array.isArray(result)) {
+      return this.client.response(result);
+    }
+    const description = `Showing project symbols for '${args.project}' project.`;
+    const elapsed = Date.now() - timer;
+    return this.paginatedResponse(result, args, description, {
+      language_id: args.language_id,
+      project: args.project,
+      query: args.query,
+      time: `${elapsed}ms`
+    });
+  }
+
+  /**
+   * Formats specific code range according to language server style rules
+   * 
+   * Applies formatting to a selected text range while preserving
+   * surrounding code structure and maintaining consistent style.
+   * 
+   * @private
+   * @param {GetRangeFormat} args - Range and file context for targeted formatting
+   * @returns {Promise<TextEdit[] | string>} Array of text edits for range formatting or error message
+   */
+  private async getRangeFormat(args: GetRangeFormat): Promise<unknown> {
+    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
+    if (error) return error;
+    const params = {
+      options: { tabSize: 2, insertSpaces: true },
+      range: {
+        start: { character: args.start_character, line: args.start_line },
+        end: { character: args.end_character, line: args.end_line }
+      },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
+  }
+
+  /**
+   * Resolves additional details for a completion item
+   * 
+   * Fetches extended information for completion items including documentation,
+   * additional text edits, and detailed type information.
+   * 
+   * @private
+   * @param {GetResolves} args - File context and completion item to resolve
+   * @returns {Promise<CompletionItem | string>} Resolved completion item with full details or error message
+   */
+  private async getResolves(args: GetResolves): Promise<unknown> {
+    const error = this.validate(args, ['file_path', 'item']);
+    if (error) return error;
+    const params = {
+      ...args.item,
+      uri: `file://${args.file_path}`
+    };
+    return await this.client.sendServerRequest(args.file_path, CompletionResolveRequest.method, params);
+  }
+
+  /**
+   * Expands selection to logical code boundaries
+   * 
+   * Intelligently expands text selection to encompass logical code units
+   * like expressions, statements, blocks, and functions.
+   * 
+   * @private
+   * @param {GetSelectionRange} args - Position and file context for selection expansion
+   * @returns {Promise<SelectionRange[] | string>} Array of expanded selection ranges or error message
+   */
+  private async getSelectionRange(args: GetSelectionRange): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: SelectionRangeParams = {
+      positions: [{ character: args.character, line: args.line }],
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
+  }
+
+  /**
+   * Extracts detailed syntax tokens for advanced highlighting and analysis
+   * 
+   * Provides semantic token information for enhanced syntax highlighting,
+   * including token types, modifiers, and positional data.
+   * 
+   * @private
+   * @param {GetSemanticTokens} args - File path for semantic token analysis
+   * @returns {Promise<SemanticTokens | string>} Semantic token data or error message
+   */
+  private async getSemanticTokens(args: GetSemanticTokens): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const params: SemanticTokensParams = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, SemanticTokensRequest.method, params);
+  }
+
+  /**
+   * Gets language server capabilities and available tool mappings
+   * 
+   * Retrieves LSP server capabilities and maps them to available MCP tools,
+   * providing comprehensive capability inspection and tool discovery.
+   * 
+   * @private
+   * @param {GetServerCapabilities} args - Language server identification
+   * @param {ToolCapabilities[]} [toolCapabilities] - Optional pre-computed tool capabilities
+   * @returns {Promise<{capabilities: ServerCapabilities, tools: Record<string, SupportedTools>} | string>} Server capabilities and tools or error message
+   */
+  private async getServerCapabilities(args: GetServerCapabilities, toolCapabilities?: ToolCapabilities[]): Promise<unknown> {
+    const error = this.validate(args, ['language_id']);
+    if (error) return error;
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured.`;
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    const project = this.client.getProjectId(args.language_id);
+    const capabilities = this.client.getServerCapabilities(args.language_id);
+    if (!capabilities) {
+      return `Capabilities not available for '${args.language_id}' language server.`;
+    }
+    if (!toolCapabilities) {
+      toolCapabilities = this.setServerTools().map(({ tool, capability }) => ({ tool, capability }));
+    }
+    const tools = this.generateToolsMap(capabilities, toolCapabilities);
+    return { language_id: args.language_id, project, capabilities, tools };
+  }
+
+  /**
+   * Lists all configured projects for a language server
+   * 
+   * Retrieves project configurations including paths, extensions, and settings
+   * for all projects associated with the specified language server.
+   * 
+   * @private
+   * @param {GetServerProjects} args - Language server identification
+   * @returns {Promise<ProjectConfig[] | string>} Array of project configurations or error message
+   */
+  private async getServerProjects(args: GetServerProjects): Promise<unknown> {
+    const error = this.validate(args, ['language_id']);
+    if (error) return error;
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return `Language server '${args.language_id}' is not configured.`;
+    }
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    const serverConfig = this.config.getServerConfig(args.language_id);
+    const projects = serverConfig.projects.map(project => ({
+      name: project.name,
+      path: project.path,
+      extensions: serverConfig.extensions,
+      configuration: serverConfig.configuration ?? {},
+      description: project.description ?? '',
+      url: project.url ?? ''
+    }));
+    return projects;
+  }
+
+  /**
+   * Gets runtime status of language servers
+   * 
+   * Provides detailed status information including process state, uptime,
+   * project associations, and error conditions for monitoring and debugging.
+   * 
+   * @private
+   * @param {GetServerStatus} args - Optional language server filter
+   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Server status or status map for all servers
+   */
+  private async getServerStatus(args: GetServerStatus): Promise<ServerStatus | Record<string, ServerStatus>> {
+    if (!args.language_id) {
+      const statusPromises = this.client.getServers().map(async (languageId) => {
+        try {
+          const connection = this.client.isServerRunning(languageId);
+          const uptime = this.client.getServerUptime(languageId);
+          if (!connection) {
+            return [languageId, { languageId, status: 'stopped', uptime: `0ms` }];
+          }
+          const serverConnection = this.client.getServerConnection(languageId);
+          if (!serverConnection || !serverConnection.initialized) {
+            const pid = serverConnection?.process?.pid;
+            const project = serverConnection?.name;
+            return [languageId, { languageId, project, pid, status: 'starting', uptime: `${uptime}ms` }];
+          }
+          const pid = serverConnection.process.pid;
+          const project = serverConnection.name;
+          return [languageId, { languageId, project, pid, status: 'ready', uptime: `${uptime}ms` }];
+        } catch (error) {
+          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
+        }
+      });
+      const results = await Promise.allSettled(statusPromises);
+      const statusEntries = results.map(result => {
+        if (result.status === 'fulfilled') {
+          return result.value;
+        } else {
+          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
+        }
+      });
+      return Object.fromEntries(statusEntries);
+    }
+    if (!this.config.hasServerConfig(args.language_id)) {
+      return { languageId: args.language_id, status: 'unconfigured', uptime: `0ms` };
+    }
+    const connection = this.client.isServerRunning(args.language_id);
+    if (!connection) {
+      return { languageId: args.language_id, status: 'stopped', uptime: `0ms` };
+    }
+    const serverConnection = this.client.getServerConnection(args.language_id);
+    const uptime = this.client.getServerUptime(args.language_id);
+    if (!serverConnection || !serverConnection.initialized) {
+      const pid = serverConnection?.process?.pid;
+      const project = serverConnection?.name;
+      return { languageId: args.language_id, project, pid, status: 'starting', uptime: `${uptime}ms` };
+    }
+    const pid = serverConnection.process.pid;
+    const project = serverConnection.name;
+    return { languageId: args.language_id, project, pid, status: 'ready', uptime: `${uptime}ms` };
+  }
+
+  /**
+   * Shows function parameters and signature help at cursor position
+   * 
+   * Provides function signature information, parameter details, and overload
+   * information to assist with function calls and method invocations.
+   * 
+   * @private
+   * @param {GetSignature} args - Position and file context for signature help
+   * @returns {Promise<SignatureHelp | string>} Signature help information or error message
+   */
+  private async getSignature(args: GetSignature): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
+  }
+
+  /**
+   * Finds all subtypes that inherit from the specified type
+   * 
+   * Analyzes type hierarchy to discover derived classes, implementing types,
+   * and subtypes for inheritance analysis and navigation.
+   * 
+   * @private
+   * @param {GetSubtypes} args - Type hierarchy item to find subtypes for
+   * @returns {Promise<TypeHierarchyItem[] | string>} Array of subtype items or error message
+   */
+  private async getSubtypes(args: GetSubtypes): Promise<unknown> {
+    const error = this.validate(args, ['item']);
+    if (error) return error;
+    const params: TypeHierarchySubtypesParams = {
+      item: args.item
+    };
+    const filePath = this.setFilePath(args.item);
+    return await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
+  }
+
+  /**
+   * Finds all parent types that the specified type inherits from
+   * 
+   * Analyzes type hierarchy to discover base classes, implemented interfaces,
+   * and supertypes for inheritance analysis and navigation.
+   * 
+   * @private
+   * @param {GetSupertypes} args - Type hierarchy item to find supertypes for
+   * @returns {Promise<TypeHierarchyItem[] | string>} Array of supertype items or error message
+   */
+  private async getSupertypes(args: GetSupertypes): Promise<unknown> {
+    const error = this.validate(args, ['item']);
+    if (error) return error;
+    const params: TypeHierarchySupertypesParams = {
+      item: args.item
+    };
+    const filePath = this.setFilePath(args.item);
+    return await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
+  }
+
+  /**
+   * Navigates to where symbol is originally defined
+   * 
+   * Locates the primary definition of symbols, functions, classes, or variables
+   * for precise navigation to declaration sites.
+   * 
+   * @private
+   * @param {GetSymbolDefinitions} args - Position and file context for definition lookup
+   * @returns {Promise<Location[] | string>} Array of definition locations or error message
+   */
+  private async getSymbolDefinitions(args: GetSymbolDefinitions): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
+  }
+
+  /**
+   * Finds all locations where symbol is used or referenced
+   * 
+   * Searches for all usages of a symbol throughout the workspace,
+   * with optional inclusion of the symbol's declaration site.
+   * 
+   * @private
+   * @param {GetSymbolReferences} args - Position, file context, and declaration inclusion settings
+   * @returns {Promise<Location[] | string>} Array of reference locations or error message
+   */
+  private async getSymbolReferences(args: GetSymbolReferences): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: ReferenceParams = {
+      context: { includeDeclaration: args.include_declaration ?? true },
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
+  }
+
+  /**
+   * Previews all locations that would be renamed with symbol
+   * 
+   * Generates a preview of all code locations that would be affected
+   * by a symbol rename operation for review before execution.
+   * 
+   * @private
+   * @param {GetSymbolRenames} args - Position, file context, and new symbol name
+   * @returns {Promise<WorkspaceEdit | string>} Workspace edit with rename changes or error message
+   */
+  private async getSymbolRenames(args: GetSymbolRenames): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line', 'new_name']);
+    if (error) return error;
+    const params: RenameParams = {
+      newName: args.new_name,
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
+  }
+
+  /**
+   * Lists all symbols in document with pagination
+   * 
+   * Extracts document outline including functions, classes, variables,
+   * and other symbols with hierarchical structure and pagination support.
+   * 
+   * @private
+   * @param {GetSymbols} args - File path and pagination parameters
+   * @returns {Promise<{data: {symbols: DocumentSymbol[]}, pagination: PageMetadata} | string>} Paginated symbol listing or error message
+   */
+  private async getSymbols(args: GetSymbols): Promise<unknown> {
+    const error = this.validate(args, ['file_path']);
+    if (error) return error;
+    const timer = Date.now();
+    const params = {
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    const fullResult = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
+    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
+      return this.client.response(fullResult);
+    }
+    const description = `Showing document symbols for '${args.file_path}' file.`;
+    const elapsed = Date.now() - timer;
+    return this.paginatedResponse(fullResult, args, description, {
+      file_path: args.file_path,
+      time: `${elapsed}ms`
+    });
+  }
+
+  /**
+   * Navigates to where symbol type is defined
+   * 
+   * Locates the definition of a symbol's type rather than the symbol itself,
+   * useful for understanding data types and class definitions.
+   * 
+   * @private
+   * @param {GetTypeDefinitions} args - Position and file context for type definition lookup
+   * @returns {Promise<Location[] | string>} Array of type definition locations or error message
+   */
+  private async getTypeDefinitions(args: GetTypeDefinitions): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: TextDocumentPositionParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
+  }
+
+  /**
+   * Builds type hierarchy showing inheritance relationships
+   * 
+   * Prepares type hierarchy analysis to enable exploration of inheritance
+   * chains and type relationships in object-oriented code.
+   * 
+   * @private
+   * @param {GetTypeHierarchy} args - Position and file context for type hierarchy preparation
+   * @returns {Promise<TypeHierarchyItem[] | string>} Array of type hierarchy items or error message
+   */
+  private async getTypeHierarchy(args: GetTypeHierarchy): Promise<unknown> {
+    const error = this.validate(args, ['character', 'file_path', 'line']);
+    if (error) return error;
+    const params: TypeHierarchyPrepareParams = {
+      position: { character: args.character, line: args.line },
+      textDocument: { uri: `file://${args.file_path}` }
+    };
+    return await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
+  }
+
+  /**
    * Handles tool execution requests from MCP clients
    * 
    * Routes incoming MCP tool requests to appropriate handler functions,
@@ -674,6 +1521,22 @@ export class McpServer {
     const response = { ...data, items: paginatedItems };
     const pagination = { more, offset, total };
     return this.client.response(description, false, { response, pagination });
+  }
+
+  /**
+   * Restarts language server with specified project
+   * 
+   * Stops current server instance and starts fresh with new or same project,
+   * useful for configuration changes or error recovery.
+   * 
+   * @private
+   * @param {RestartServer} args - Language server and project identification
+   * @returns {Promise<Response | string>} Restart result with timing information or error message
+   */
+  private async restartServer(args: RestartServer): Promise<unknown> {
+    const error = this.validate(args, ['language_id', 'project']);
+    if (error) return error;
+    return await this.client.restartServer(args.language_id, args.project);
   }
 
   /**
@@ -788,6 +1651,45 @@ export class McpServer {
   }
 
   /**
+   * Starts a language server for specified language and project
+   * 
+   * Initializes new language server instance with project configuration,
+   * enabling LSP features for the target codebase.
+   * 
+   * @private
+   * @param {StartServer} args - Language server and optional project identification
+   * @returns {Promise<Response | string>} Startup result with server information or error message
+   */
+  private async startServer(args: StartServer): Promise<unknown> {
+    const error = this.validate(args, ['language_id']);
+    if (error) return error;
+    return await this.client.startServer(args.language_id, args.project);
+  }
+
+  /**
+   * Stops a running language server gracefully
+   * 
+   * Terminates language server process and cleans up resources,
+   * ensuring proper shutdown sequence and resource cleanup.
+   * 
+   * @private
+   * @param {StopServer} args - Language server identification
+   * @returns {Promise<string>} Success message or error message
+   */
+  private async stopServer(args: StopServer): Promise<unknown> {
+    const error = this.validate(args, ['language_id']);
+    if (error) return error;
+    if (!this.client.isServerRunning(args.language_id)) {
+      return `Language server '${args.language_id}' is not running.`;
+    }
+    const connection = this.client.getServerConnection(args.language_id);
+    if (connection) {
+      await this.client.stopServer(connection.name);
+    }
+    return `Successfully stopped '${args.language_id}' language server.`;
+  }
+
+  /**
    * Validates required arguments for tool handler methods using Zod schemas
    * 
    * Performs runtime validation of tool arguments against required field specifications,
@@ -832,867 +1734,5 @@ export class McpServer {
   async connect(transport: StdioServerTransport): Promise<void> {
     transport.onerror = () => { };
     await this.server.connect(transport);
-  }
-
-  /**
-   * Generates capability-based tools map for MCP tool exposure
-   * 
-   * Maps LSP server capabilities to available MCP tools, creating a dynamic
-   * tool registry based on what the current language server actually supports.
-   * 
-   * @param {ServerCapabilities} capabilities - LSP server capabilities from initialization
-   * @param {ToolCapabilities[]} toolCapabilities - Available tool-to-capability mappings
-   * @returns {Record<string, SupportedTools>} Capability-keyed mapping of supported tools
-   */
-  generateToolsMap(capabilities: ServerCapabilities, toolCapabilities: ToolCapabilities[]): Record<string, SupportedTools> {
-    const server = new Map<string, Tool[]>();
-    const toolsMap: Record<string, SupportedTools> = {};
-    for (const { tool, capability } of toolCapabilities) {
-      if (!server.has(capability)) {
-        server.set(capability, []);
-      }
-      server.get(capability)!.push(tool);
-    }
-    for (const [capability, value] of Object.entries(capabilities)) {
-      if (value) {
-        if (server.has(capability)) {
-          const tools = server.get(capability)!;
-          toolsMap[capability] = { supported: true, tools };
-        } else {
-          toolsMap[capability] = { supported: false, tools: [] };
-        }
-      }
-    }
-    const serverOperations = server.get('serverOperations');
-    if (serverOperations && serverOperations.length) {
-      toolsMap['serverOperations'] = { supported: true, tools: serverOperations };
-    }
-    return toolsMap;
-  }
-
-  /**
-   * Prepares call hierarchy for symbol at cursor position
-   * 
-   * Initiates call hierarchy analysis to enable caller/callee relationship exploration.
-   * 
-   * @param {GetCallHierarchy} args - Position and file context for hierarchy preparation
-   * @returns {Promise<CallHierarchyItem[] | string>} Array of call hierarchy items or error message
-   */
-  async getCallHierarchy(args: GetCallHierarchy): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: CallHierarchyPrepareParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, CallHierarchyPrepareRequest.method, params);
-  }
-
-  /**
-   * Retrieves code actions and quick fixes at cursor position
-   * 
-   * Requests automated refactoring suggestions, error fixes, and code improvements
-   * from language server diagnostics.
-   * 
-   * @param {GetCodeActions} args - Position and file context for code action discovery
-   * @returns {Promise<CodeAction[] | string>} Array of available code actions or error message
-   */
-  async getCodeActions(args: GetCodeActions): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: CodeActionParams = {
-      context: { diagnostics: [] },
-      range: {
-        start: { character: args.character, line: args.line },
-        end: { character: args.character, line: args.line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, CodeActionRequest.method, params);
-  }
-
-  /**
-   * Resolves additional details for a code action item
-   * 
-   * Fetches complete edit operations, command details, and workspace changes
-   * for a previously retrieved code action.
-   * 
-   * @param {GetCodeResolves} args - File context and code action item to resolve
-   * @returns {Promise<CodeAction | string>} Resolved code action with full details or error message
-   */
-  async getCodeResolves(args: GetCodeResolves): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
-  }
-
-  /**
-   * Extracts color definitions and references from document
-   * 
-   * Identifies color values (hex, rgb, hsl) and their locations for color picker integration.
-   * 
-   * @param {GetColors} args - File path for color extraction
-   * @returns {Promise<ColorInformation[] | string>} Array of color information or error message
-   */
-  async getColors(args: GetColors): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentColorRequest.method, params);
-  }
-
-  /**
-   * Retrieves code completions and IntelliSense suggestions at cursor position
-   * 
-   * Provides context-aware code completion including symbols, keywords, snippets,
-   * and documentation for enhanced developer productivity.
-   * 
-   * @param {GetCompletions} args - Position and file context for completion discovery
-   * @returns {Promise<CompletionItem[] | string>} Array of completion suggestions or error message
-   */
-  async getCompletions(args: GetCompletions): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
-  }
-
-  /**
-   * Extracts diagnostics from document
-   * 
-   * Identifies errors, warnings, and info messages for code quality
-   * analysis and validation feedback.
-   * 
-   * @param {GetDiagnostics} args - File path for diagnostic extraction
-   * @returns {Promise<Diagnostic[] | string>} Array of diagnostics or error message
-   */
-  async getDiagnostics(args: GetDiagnostics): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentDiagnosticRequest.method, params);
-  }
-
-  /**
-   * Identifies collapsible code sections for editor folding
-   * 
-   * Analyzes document structure to find foldable regions like functions,
-   * classes, blocks, and comments for improved code navigation.
-   * 
-   * @param {GetFoldingRanges} args - File path for folding range analysis
-   * @returns {Promise<FoldingRange[] | string>} Array of foldable ranges or error message
-   */
-  async getFoldingRanges(args: GetFoldingRanges): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, FoldingRangeRequest.method, params);
-  }
-
-  /**
-   * Formats entire document according to language server style rules
-   * 
-   * Applies consistent formatting using configured style guidelines including
-   * indentation, spacing, and language-specific formatting conventions.
-   * 
-   * @param {GetFormat} args - File path for document formatting
-   * @returns {Promise<TextEdit[] | string>} Array of text edits for formatting or error message
-   */
-  async getFormat(args: GetFormat): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      options: { tabSize: 2, insertSpaces: true },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentFormattingRequest.method, params);
-  }
-
-  /**
-   * Highlights all occurrences of symbol at cursor position
-   * 
-   * Finds and highlights all references to the symbol under cursor
-   * for visual identification and navigation assistance.
-   * 
-   * @param {GetHighlights} args - Position and file context for symbol highlighting
-   * @returns {Promise<DocumentHighlight[] | string>} Array of highlight ranges or error message
-   */
-  async getHighlights(args: GetHighlights): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentHighlightRequest.method, params);
-  }
-
-  /**
-   * Retrieves hover information and documentation at cursor position
-   * 
-   * Provides type information, documentation, and contextual details
-   * for symbols, functions, and variables under the cursor.
-   * 
-   * @param {GetHover} args - Position and file context for hover information
-   * @returns {Promise<Hover | string>} Hover content with documentation or error message
-   */
-  async getHover(args: GetHover): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, HoverRequest.method, params);
-  }
-
-  /**
-   * Finds all implementations of interface or abstract method at cursor
-   * 
-   * Locates concrete implementations of abstract methods, interface methods,
-   * or virtual functions for navigation and analysis.
-   * 
-   * @param {GetImplementations} args - Position and file context for implementation search
-   * @returns {Promise<Location[] | string>} Array of implementation locations or error message
-   */
-  async getImplementations(args: GetImplementations): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, ImplementationRequest.method, params);
-  }
-
-  /**
-   * Retrieves all functions that call the specified symbol
-   * 
-   * Analyzes call hierarchy to find all callers of a function or method,
-   * enabling reverse dependency analysis and code navigation.
-   * 
-   * @param {GetIncomingCalls} args - Call hierarchy item to find callers for
-   * @returns {Promise<CallHierarchyIncomingCall[] | string>} Array of incoming calls or error message
-   */
-  async getIncomingCalls(args: GetIncomingCalls): Promise<unknown> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: CallHierarchyIncomingCallsParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, CallHierarchyIncomingCallsRequest.method, params);
-  }
-
-  /**
-   * Resolves additional details for an inlay hint item
-   * 
-   * Fetches complete information for inlay hints including tooltips,
-   * click actions, and extended documentation.
-   * 
-   * @param {GetInlayHint} args - File context and inlay hint item to resolve
-   * @returns {Promise<InlayHint | string>} Resolved inlay hint with full details or error message
-   */
-  async getInlayHint(args: GetInlayHint): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
-  }
-
-  /**
-   * Retrieves inline type annotations and parameter hints for code range
-   * 
-   * Provides visual type hints, parameter names, and return types
-   * directly in the editor for improved code readability.
-   * 
-   * @param {GetInlayHints} args - Range and file context for hint analysis
-   * @returns {Promise<InlayHint[] | string>} Array of inlay hints or error message
-   */
-  async getInlayHints(args: GetInlayHints): Promise<unknown> {
-    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
-    const params: InlayHintParams = {
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, InlayHintRequest.method, params);
-  }
-
-  /**
-   * Finds related ranges that should be edited simultaneously
-   * 
-   * Identifies linked editing ranges where changes to one location
-   * should automatically apply to related locations (e.g., HTML tag pairs).
-   * 
-   * @param {GetLinkedEditingRange} args - Position and file context for linked range discovery
-   * @returns {Promise<LinkedEditingRanges | string>} Linked editing ranges or error message
-   */
-  async getLinkedEditingRange(args: GetLinkedEditingRange): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: LinkedEditingRangeParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, LinkedEditingRangeRequest.method, params);
-  }
-
-  /**
-   * Resolves target URL for a document link item
-   * 
-   * Fetches the actual target URL for clickable links within documents,
-   * enabling navigation to external resources and file references.
-   * 
-   * @param {GetLinkResolves} args - File context and document link item to resolve
-   * @returns {Promise<DocumentLink | string>} Resolved document link with target or error message
-   */
-  async getLinkResolves(args: GetLinkResolves): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
-  }
-
-  /**
-   * Extracts clickable links and references from document
-   * 
-   * Scans document for URLs, file references, and other clickable links
-   * that can be navigated or opened in external applications.
-   * 
-   * @param {GetLinks} args - File path for link extraction
-   * @returns {Promise<DocumentLink[] | string>} Array of document links or error message
-   */
-  async getLinks(args: GetLinks): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentLinkRequest.method, params);
-  }
-
-  /**
-   * Retrieves all functions called by the specified symbol
-   * 
-   * Analyzes call hierarchy to find all functions or methods called
-   * from the current symbol, enabling dependency analysis.
-   * 
-   * @param {GetOutgoingCalls} args - Call hierarchy item to find callees for
-   * @returns {Promise<CallHierarchyOutgoingCall[] | string>} Array of outgoing calls or error message
-   */
-  async getOutgoingCalls(args: GetOutgoingCalls): Promise<unknown> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: CallHierarchyOutgoingCallsParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, CallHierarchyOutgoingCallsRequest.method, params);
-  }
-
-  /**
-   * Lists all files in the project workspace with pagination
-   * 
-   * Retrieves cached project files discovered during server initialization,
-   * with pagination support for large codebases and project path information.
-   * 
-   * @param {GetProjectFiles} args - Project identification and pagination parameters
-   * @returns {Promise<{data: {files: string[], path: string}, pagination: PageMetadata} | string>} Paginated file listing or error message
-   */
-  async getProjectFiles(args: GetProjectFiles): Promise<unknown> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    if (args.project !== this.client.getProjectId(args.language_id)) {
-      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projectConfig = serverConfig.projects.find(id => id.name === args.project) as { name: string, path: string };
-    const files = await this.client.getProjectFiles(args.language_id, args.project);
-    if (!files) {
-      return `No files found for '${args.project}' project in '${args.language_id}' language server.`;
-    }
-    const description = `Showing files for '${args.project}' project.`;
-    return this.paginatedResponse(files, args, description, {
-      language_id: args.language_id,
-      project: args.project,
-      path: projectConfig.path
-    });
-  }
-
-  /**
-   * Searches for symbols across entire project workspace with pagination
-   * 
-   * Performs project-wide symbol search using workspace symbol provider,
-   * with pagination support for large result sets and comprehensive metadata.
-   * 
-   * @param {GetProjectSymbols} args - Project identification and search parameters
-   * @returns {Promise<{data: {symbols: WorkspaceSymbol[]}, pagination: PageMetadata} | string>} Paginated symbol results or error message
-   */
-  async getProjectSymbols(args: GetProjectSymbols): Promise<unknown> {
-    const error = this.validate(args, ['language_id', 'project', 'query']);
-    if (error) return error;
-    const timer = Date.now();
-    if (args.project !== this.client.getProjectId(args.language_id)) {
-      return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
-    }
-    await this.client.loadProjectFiles(args.language_id, args.project, args.timeout);
-    const params: WorkspaceSymbolParams = { query: args.query ?? this.query };
-    const result = await this.client.sendRequest(args.language_id, args.project, WorkspaceSymbolRequest.method, params);
-    if (typeof result === 'string' || !Array.isArray(result)) {
-      return this.client.response(result);
-    }
-    const description = `Showing project symbols for '${args.project}' project.`;
-    const elapsed = Date.now() - timer;
-    return this.paginatedResponse(result, args, description, {
-      language_id: args.language_id,
-      project: args.project,
-      query: args.query,
-      time: `${elapsed}ms`
-    });
-  }
-
-  /**
-   * Formats specific code range according to language server style rules
-   * 
-   * Applies formatting to a selected text range while preserving
-   * surrounding code structure and maintaining consistent style.
-   * 
-   * @param {GetRangeFormat} args - Range and file context for targeted formatting
-   * @returns {Promise<TextEdit[] | string>} Array of text edits for range formatting or error message
-   */
-  async getRangeFormat(args: GetRangeFormat): Promise<unknown> {
-    const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
-    const params = {
-      options: { tabSize: 2, insertSpaces: true },
-      range: {
-        start: { character: args.start_character, line: args.start_line },
-        end: { character: args.end_character, line: args.end_line }
-      },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DocumentRangeFormattingRequest.method, params);
-  }
-
-  /**
-   * Resolves additional details for a completion item
-   * 
-   * Fetches extended information for completion items including documentation,
-   * additional text edits, and detailed type information.
-   * 
-   * @param {GetResolves} args - File context and completion item to resolve
-   * @returns {Promise<CompletionItem | string>} Resolved completion item with full details or error message
-   */
-  async getResolves(args: GetResolves): Promise<unknown> {
-    const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
-    const params = {
-      ...args.item,
-      uri: `file://${args.file_path}`
-    };
-    return await this.client.sendServerRequest(args.file_path, CompletionResolveRequest.method, params);
-  }
-
-  /**
-   * Expands selection to logical code boundaries
-   * 
-   * Intelligently expands text selection to encompass logical code units
-   * like expressions, statements, blocks, and functions.
-   * 
-   * @param {GetSelectionRange} args - Position and file context for selection expansion
-   * @returns {Promise<SelectionRange[] | string>} Array of expanded selection ranges or error message
-   */
-  async getSelectionRange(args: GetSelectionRange): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: SelectionRangeParams = {
-      positions: [{ character: args.character, line: args.line }],
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SelectionRangeRequest.method, params);
-  }
-
-  /**
-   * Extracts detailed syntax tokens for advanced highlighting and analysis
-   * 
-   * Provides semantic token information for enhanced syntax highlighting,
-   * including token types, modifiers, and positional data.
-   * 
-   * @param {GetSemanticTokens} args - File path for semantic token analysis
-   * @returns {Promise<SemanticTokens | string>} Semantic token data or error message
-   */
-  async getSemanticTokens(args: GetSemanticTokens): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const params: SemanticTokensParams = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SemanticTokensRequest.method, params);
-  }
-
-  /**
-   * Gets language server capabilities and available tool mappings
-   * 
-   * Retrieves LSP server capabilities and maps them to available MCP tools,
-   * providing comprehensive capability inspection and tool discovery.
-   * 
-   * @param {GetServerCapabilities} args - Language server identification
-   * @param {ToolCapabilities[]} [toolCapabilities] - Optional pre-computed tool capabilities
-   * @returns {Promise<{capabilities: ServerCapabilities, tools: Record<string, SupportedTools>} | string>} Server capabilities and tools or error message
-   */
-  async getServerCapabilities(args: GetServerCapabilities, toolCapabilities?: ToolCapabilities[]): Promise<unknown> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const project = this.client.getProjectId(args.language_id);
-    const capabilities = this.client.getServerCapabilities(args.language_id);
-    if (!capabilities) {
-      return `Capabilities not available for '${args.language_id}' language server.`;
-    }
-    if (!toolCapabilities) {
-      toolCapabilities = this.setServerTools().map(({ tool, capability }) => ({ tool, capability }));
-    }
-    const tools = this.generateToolsMap(capabilities, toolCapabilities);
-    return { language_id: args.language_id, project, capabilities, tools };
-  }
-
-  /**
-   * Lists all configured projects for a language server
-   * 
-   * Retrieves project configurations including paths, extensions, and settings
-   * for all projects associated with the specified language server.
-   * 
-   * @param {GetServerProjects} args - Language server identification
-   * @returns {Promise<ProjectConfig[] | string>} Array of project configurations or error message
-   */
-  async getServerProjects(args: GetServerProjects): Promise<unknown> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return `Language server '${args.language_id}' is not configured.`;
-    }
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const serverConfig = this.config.getServerConfig(args.language_id);
-    const projects = serverConfig.projects.map(project => ({
-      name: project.name,
-      path: project.path,
-      extensions: serverConfig.extensions,
-      configuration: serverConfig.configuration ?? {},
-      description: project.description ?? '',
-      url: project.url ?? ''
-    }));
-    return projects;
-  }
-
-  /**
-   * Gets runtime status of language servers
-   * 
-   * Provides detailed status information including process state, uptime,
-   * project associations, and error conditions for monitoring and debugging.
-   * 
-   * @param {GetServerStatus} args - Optional language server filter
-   * @returns {Promise<ServerStatus | Record<string, ServerStatus>>} Server status or status map for all servers
-   */
-  async getServerStatus(args: GetServerStatus): Promise<ServerStatus | Record<string, ServerStatus>> {
-    if (!args.language_id) {
-      const statusPromises = this.client.getServers().map(async (languageId) => {
-        try {
-          const connection = this.client.isServerRunning(languageId);
-          const uptime = this.client.getServerUptime(languageId);
-          if (!connection) {
-            return [languageId, { languageId, status: 'stopped', uptime: `0ms` }];
-          }
-          const serverConnection = this.client.getServerConnection(languageId);
-          if (!serverConnection || !serverConnection.initialized) {
-            const pid = serverConnection?.process?.pid;
-            const project = serverConnection?.name;
-            return [languageId, { languageId, project, pid, status: 'starting', uptime: `${uptime}ms` }];
-          }
-          const pid = serverConnection.process.pid;
-          const project = serverConnection.name;
-          return [languageId, { languageId, project, pid, status: 'ready', uptime: `${uptime}ms` }];
-        } catch (error) {
-          return [languageId, { status: 'error', uptime: `0ms`, error: error instanceof Error ? error.message : String(error) }];
-        }
-      });
-      const results = await Promise.allSettled(statusPromises);
-      const statusEntries = results.map(result => {
-        if (result.status === 'fulfilled') {
-          return result.value;
-        } else {
-          return ['unknown', { status: 'error', uptime: `0ms`, error: result.reason }];
-        }
-      });
-      return Object.fromEntries(statusEntries);
-    }
-    if (!this.config.hasServerConfig(args.language_id)) {
-      return { languageId: args.language_id, status: 'unconfigured', uptime: `0ms` };
-    }
-    const connection = this.client.isServerRunning(args.language_id);
-    if (!connection) {
-      return { languageId: args.language_id, status: 'stopped', uptime: `0ms` };
-    }
-    const serverConnection = this.client.getServerConnection(args.language_id);
-    const uptime = this.client.getServerUptime(args.language_id);
-    if (!serverConnection || !serverConnection.initialized) {
-      const pid = serverConnection?.process?.pid;
-      const project = serverConnection?.name;
-      return { languageId: args.language_id, project, pid, status: 'starting', uptime: `${uptime}ms` };
-    }
-    const pid = serverConnection.process.pid;
-    const project = serverConnection.name;
-    return { languageId: args.language_id, project, pid, status: 'ready', uptime: `${uptime}ms` };
-  }
-
-  /**
-   * Shows function parameters and signature help at cursor position
-   * 
-   * Provides function signature information, parameter details, and overload
-   * information to assist with function calls and method invocations.
-   * 
-   * @param {GetSignature} args - Position and file context for signature help
-   * @returns {Promise<SignatureHelp | string>} Signature help information or error message
-   */
-  async getSignature(args: GetSignature): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, SignatureHelpRequest.method, params);
-  }
-
-  /**
-   * Finds all subtypes that inherit from the specified type
-   * 
-   * Analyzes type hierarchy to discover derived classes, implementing types,
-   * and subtypes for inheritance analysis and navigation.
-   * 
-   * @param {GetSubtypes} args - Type hierarchy item to find subtypes for
-   * @returns {Promise<TypeHierarchyItem[] | string>} Array of subtype items or error message
-   */
-  async getSubtypes(args: GetSubtypes): Promise<unknown> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: TypeHierarchySubtypesParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, TypeHierarchySubtypesRequest.method, params);
-  }
-
-  /**
-   * Finds all parent types that the specified type inherits from
-   * 
-   * Analyzes type hierarchy to discover base classes, implemented interfaces,
-   * and supertypes for inheritance analysis and navigation.
-   * 
-   * @param {GetSupertypes} args - Type hierarchy item to find supertypes for
-   * @returns {Promise<TypeHierarchyItem[] | string>} Array of supertype items or error message
-   */
-  async getSupertypes(args: GetSupertypes): Promise<unknown> {
-    const error = this.validate(args, ['item']);
-    if (error) return error;
-    const params: TypeHierarchySupertypesParams = {
-      item: args.item
-    };
-    const filePath = this.setFilePath(args.item);
-    return await this.client.sendServerRequest(filePath, TypeHierarchySupertypesRequest.method, params);
-  }
-
-  /**
-   * Navigates to where symbol is originally defined
-   * 
-   * Locates the primary definition of symbols, functions, classes, or variables
-   * for precise navigation to declaration sites.
-   * 
-   * @param {GetSymbolDefinitions} args - Position and file context for definition lookup
-   * @returns {Promise<Location[] | string>} Array of definition locations or error message
-   */
-  async getSymbolDefinitions(args: GetSymbolDefinitions): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, DefinitionRequest.method, params);
-  }
-
-  /**
-   * Finds all locations where symbol is used or referenced
-   * 
-   * Searches for all usages of a symbol throughout the workspace,
-   * with optional inclusion of the symbol's declaration site.
-   * 
-   * @param {GetSymbolReferences} args - Position, file context, and declaration inclusion settings
-   * @returns {Promise<Location[] | string>} Array of reference locations or error message
-   */
-  async getSymbolReferences(args: GetSymbolReferences): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: ReferenceParams = {
-      context: { includeDeclaration: args.include_declaration ?? true },
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, ReferencesRequest.method, params);
-  }
-
-  /**
-   * Previews all locations that would be renamed with symbol
-   * 
-   * Generates a preview of all code locations that would be affected
-   * by a symbol rename operation for review before execution.
-   * 
-   * @param {GetSymbolRenames} args - Position, file context, and new symbol name
-   * @returns {Promise<WorkspaceEdit | string>} Workspace edit with rename changes or error message
-   */
-  async getSymbolRenames(args: GetSymbolRenames): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line', 'new_name']);
-    if (error) return error;
-    const params: RenameParams = {
-      newName: args.new_name,
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, RenameRequest.method, params);
-  }
-
-  /**
-   * Lists all symbols in document with pagination
-   * 
-   * Extracts document outline including functions, classes, variables,
-   * and other symbols with hierarchical structure and pagination support.
-   * 
-   * @param {GetSymbols} args - File path and pagination parameters
-   * @returns {Promise<{data: {symbols: DocumentSymbol[]}, pagination: PageMetadata} | string>} Paginated symbol listing or error message
-   */
-  async getSymbols(args: GetSymbols): Promise<unknown> {
-    const error = this.validate(args, ['file_path']);
-    if (error) return error;
-    const timer = Date.now();
-    const params = {
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    const fullResult = await this.client.sendServerRequest(args.file_path, DocumentSymbolRequest.method, params);
-    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
-      return this.client.response(fullResult);
-    }
-    const description = `Showing document symbols for '${args.file_path}' file.`;
-    const elapsed = Date.now() - timer;
-    return this.paginatedResponse(fullResult, args, description, {
-      file_path: args.file_path,
-      time: `${elapsed}ms`
-    });
-  }
-
-  /**
-   * Navigates to where symbol type is defined
-   * 
-   * Locates the definition of a symbol's type rather than the symbol itself,
-   * useful for understanding data types and class definitions.
-   * 
-   * @param {GetTypeDefinitions} args - Position and file context for type definition lookup
-   * @returns {Promise<Location[] | string>} Array of type definition locations or error message
-   */
-  async getTypeDefinitions(args: GetTypeDefinitions): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TextDocumentPositionParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, TypeDefinitionRequest.method, params);
-  }
-
-  /**
-   * Builds type hierarchy showing inheritance relationships
-   * 
-   * Prepares type hierarchy analysis to enable exploration of inheritance
-   * chains and type relationships in object-oriented code.
-   * 
-   * @param {GetTypeHierarchy} args - Position and file context for type hierarchy preparation
-   * @returns {Promise<TypeHierarchyItem[] | string>} Array of type hierarchy items or error message
-   */
-  async getTypeHierarchy(args: GetTypeHierarchy): Promise<unknown> {
-    const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
-    const params: TypeHierarchyPrepareParams = {
-      position: { character: args.character, line: args.line },
-      textDocument: { uri: `file://${args.file_path}` }
-    };
-    return await this.client.sendServerRequest(args.file_path, TypeHierarchyPrepareRequest.method, params);
-  }
-
-  /**
-   * Restarts language server with specified project
-   * 
-   * Stops current server instance and starts fresh with new or same project,
-   * useful for configuration changes or error recovery.
-   * 
-   * @param {RestartServer} args - Language server and project identification
-   * @returns {Promise<Response | string>} Restart result with timing information or error message
-   */
-  async restartServer(args: RestartServer): Promise<unknown> {
-    const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
-    return await this.client.restartServer(args.language_id, args.project);
-  }
-
-  /**
-   * Starts a language server for specified language and project
-   * 
-   * Initializes new language server instance with project configuration,
-   * enabling LSP features for the target codebase.
-   * 
-   * @param {StartServer} args - Language server and optional project identification
-   * @returns {Promise<Response | string>} Startup result with server information or error message
-   */
-  async startServer(args: StartServer): Promise<unknown> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    return await this.client.startServer(args.language_id, args.project);
-  }
-
-  /**
-   * Stops a running language server gracefully
-   * 
-   * Terminates language server process and cleans up resources,
-   * ensuring proper shutdown sequence and resource cleanup.
-   * 
-   * @param {StopServer} args - Language server identification
-   * @returns {Promise<string>} Success message or error message
-   */
-  async stopServer(args: StopServer): Promise<unknown> {
-    const error = this.validate(args, ['language_id']);
-    if (error) return error;
-    if (!this.client.isServerRunning(args.language_id)) {
-      return `Language server '${args.language_id}' is not running.`;
-    }
-    const connection = this.client.getServerConnection(args.language_id);
-    if (connection) {
-      await this.client.stopServer(connection.name);
-    }
-    return `Successfully stopped '${args.language_id}' language server.`;
   }
 }
