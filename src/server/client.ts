@@ -262,7 +262,21 @@ export class Client {
       return [];
     }
     const excludes = [
-      'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp', 'venv'
+      'bin',
+      'build',
+      'cache',
+      'coverage',
+      'dist',
+      'docs',
+      'examples',
+      'log',
+      'node_modules',
+      'obj',
+      'out',
+      'target',
+      'temp',
+      'tmp',
+      'venv'
     ];
     const includePatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
     if (patterns?.include && patterns.include.length) {
