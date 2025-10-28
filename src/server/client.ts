@@ -264,6 +264,7 @@ export class Client {
       return [];
     }
     const excludes = [
+      '__pycache__',
       'bin',
       'build',
       'cache',
@@ -277,6 +278,7 @@ export class Client {
       'out',
       'target',
       'temp',
+      'tests',
       'tmp',
       'venv'
     ];

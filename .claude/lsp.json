@@ -151,8 +151,7 @@
           "path": "/Users/username/github/fastapi",
           "patterns": {
             "exclude": [
-              "**/__pycache__/**",
-              "**/tests/**"
+              "**/docs_src"
             ]
           }
         }
@@ -227,12 +226,7 @@
           "name": "typescript-sdk",
           "description": "Official TypeScript SDK for Model Context Protocol servers and clients.",
           "url": "https://github.com/modelcontextprotocol/typescript-sdk",
-          "path": "/Users/username/github/typescript-sdk",
-          "patterns": {
-            "exclude": [
-              "**/src/examples/**"
-            ]
-          }
+          "path": "/Users/username/github/typescript-sdk"
         }
       ]
     }
