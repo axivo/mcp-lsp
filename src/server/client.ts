@@ -292,7 +292,7 @@ export class Client {
         }
       }
     }
-    const excludePatterns: string[] = ['**/.*', '**/__*', ...excludes.map(pattern => `**/${pattern}`)];
+    const excludePatterns: string[] = ['**/.*', '**/__*/', ...excludes.map(pattern => `**/${pattern}`)];
     if (patterns?.exclude && patterns.exclude.length) {
       for (const pattern of patterns.exclude) {
         excludePatterns.push(pattern);
