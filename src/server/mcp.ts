@@ -523,6 +523,17 @@ interface RestartServer extends LanguageId {
   project: string;
 }
 
+/**
+ * Server runtime status information
+ * 
+ * @interface ServerStatus
+ * @property {'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured'} status - Current server state
+ * @property {string} uptime - Server uptime in milliseconds
+ * @property {string} [error] - Error message if status is 'error'
+ * @property {string} [languageId] - Language server identifier
+ * @property {number} [pid] - Process ID if server is running
+ * @property {string} [project] - Project name if server is running
+ */
 interface ServerStatus {
   status: 'error' | 'ready' | 'starting' | 'stopped' | 'unconfigured';
   uptime: string;
@@ -546,12 +557,32 @@ interface ServerTools {
   tool: Tool;
 }
 
+/**
+ * Parameters for server start operations
+ * 
+ * @interface StartServer
+ * @extends LanguageId
+ * @property {string} [project] - Optional project name to start server with
+ */
 interface StartServer extends LanguageId {
   project?: string;
 }
 
+/**
+ * Parameters for server stop operations
+ * 
+ * @interface StopServer
+ * @extends LanguageId
+ */
 interface StopServer extends LanguageId { }
 
+/**
+ * Tools organized by capability with support status
+ * 
+ * @interface SupportedTools
+ * @property {boolean} supported - Whether this capability is supported
+ * @property {Tool[]} tools - Array of tools for this capability
+ */
 interface SupportedTools {
   supported: boolean;
   tools: Tool[];

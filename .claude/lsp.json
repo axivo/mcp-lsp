@@ -151,12 +151,44 @@
           "path": "/Users/username/github/fastapi",
           "patterns": {
             "exclude": [
-              "**/__pycache__/**",
-              "**/tests/**"
+              "**/docs_src"
             ]
           }
         }
       ]
+    },
+    "terraform": {
+      "command": "terraform-ls",
+      "args": [
+        "serve"
+      ],
+      "configuration": {
+        "terraform": {
+          "path": "/opt/homebrew/bin/terraform"
+        },
+        "validation": {
+          "enableEnhancedValidation": true
+        }
+      },
+      "extensions": [
+        ".tf",
+        ".tfvars"
+      ],
+      "init": [
+        "/opt/homebrew/bin/terraform init"
+      ],
+      "projects": [
+        {
+          "name": "terraform-aws-eks",
+          "description": "A Terraform module to create Amazon EKS resources",
+          "url": "https://github.com/terraform-aws-modules/terraform-aws-eks",
+          "path": "/Users/floren/github/terraform-aws-eks"
+        }
+      ],
+      "settings": {
+        "preloadFiles": false,
+        "workspace": false
+      }
     },
     "typescript": {
       "command": "typescript-language-server",
@@ -194,12 +226,7 @@
           "name": "typescript-sdk",
           "description": "Official TypeScript SDK for Model Context Protocol servers and clients.",
           "url": "https://github.com/modelcontextprotocol/typescript-sdk",
-          "path": "/Users/username/github/typescript-sdk",
-          "patterns": {
-            "exclude": [
-              "**/src/examples/**"
-            ]
-          }
+          "path": "/Users/username/github/typescript-sdk"
         }
       ]
     }

@@ -10,7 +10,7 @@ import { deepmerge } from 'deepmerge-ts';
 import fg from 'fast-glob';
 import find, { ProcessInfo } from 'find-process';
 import gracefulFs from 'graceful-fs';
-import { ChildProcess, spawn } from 'node:child_process';
+import { ChildProcess, exec, spawn } from 'node:child_process';
 import { dirname, isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
@@ -69,7 +69,7 @@ import {
   WorkspaceFolder,
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
-import { Config, ProjectConfig, ServerConfig } from './config.js';
+import { Config, ProjectConfig } from './config.js';
 
 /**
  * Standardized response format for MCP tool execution
@@ -120,8 +120,10 @@ export class Client {
   private query: string;
   private rateLimiter: Map<string, number> = new Map();
   private serverStartTimes: Map<string, number> = new Map();
+  private readonly execAsync = promisify(exec);
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
+
 
   /**
    * Creates a new Client instance
@@ -145,9 +147,9 @@ export class Client {
    * @private
    * @param {string} languageId - Language identifier
    * @param {string} [project] - Project name to validate, defaults to first project
-   * @returns {{ config: { server: ServerConfig; project: ProjectConfig } } | Response} Config object on success, error response on failure
+   * @returns {{ config: { server: ReturnType<Config['getServerConfig']>; project: ProjectConfig } } | Response} Config object on success, error response on failure
    */
-  private checkConfig(languageId: string, project?: string): { config: { server: ServerConfig; project: ProjectConfig } } | Response {
+  private checkConfig(languageId: string, project?: string): { config: { server: ReturnType<Config['getServerConfig']>; project: ProjectConfig } } | Response {
     const serverConfig = this.config.getServerConfig(languageId);
     if (!serverConfig.command) {
       return this.response(`Language server '${languageId}' is not configured.`);
@@ -262,7 +264,23 @@ export class Client {
       return [];
     }
     const excludes = [
-      'bin', 'build', 'cache', 'coverage', 'dist', 'log', 'node_modules', 'obj', 'out', 'target', 'temp', 'tmp', 'venv'
+      'bin',
+      'build',
+      'cache',
+      'coverage',
+      'dist',
+      'docs',
+      'examples',
+      'log',
+      'node_modules',
+      'obj',
+      'out',
+      'target',
+      'temp',
+      'tests',
+      'tmp',
+      'vendor',
+      'venv'
     ];
     const includePatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
     if (patterns?.include && patterns.include.length) {
@@ -274,7 +292,7 @@ export class Client {
         }
       }
     }
-    const excludePatterns: string[] = ['**/.*', ...excludes.map(pattern => `**/${pattern}`)];
+    const excludePatterns: string[] = ['**/.*', '**/__*/', ...excludes.map(pattern => `**/${pattern}`)];
     if (patterns?.exclude && patterns.exclude.length) {
       for (const pattern of patterns.exclude) {
         excludePatterns.push(pattern);
@@ -436,12 +454,17 @@ export class Client {
       const projectFiles = this.projectFiles.get(project);
       try {
         if (projectFiles && projectFiles.length) {
-          await this.openFiles(languageId, project, projectFiles);
+          if (serverConfig.settings.preloadFiles === true) {
+            await this.openFiles(languageId, project, projectFiles);
+          }
           if (serverConfig.settings.workspace === true) {
             const params = { query: this.query };
             await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
           }
           serverConnection.initialized = true;
+          if (serverConfig.settings.preloadFiles === false) {
+            await this.openFiles(languageId, project, projectFiles);
+          }
         }
       } catch (error) {
         serverConnection.initialized = false;
@@ -1052,6 +1075,19 @@ export class Client {
     }
     try {
       const timer = Date.now();
+      if (config.server.init?.length) {
+        for (const command of config.server.init) {
+          try {
+            await this.execAsync(command, {
+              cwd: config.project.path,
+              env: { ...process.env, ...config.server.env },
+              timeout: config.server.settings.timeoutMs
+            });
+          } catch (error) {
+            return this.response(`Initialization failed for '${languageId}' language server: ${error}`);
+          }
+        }
+      }
       const processes = await (find as unknown as {
         default: (by: string, value: string) => Promise<ProcessInfo[]>
       }).default('name', config.server.command);

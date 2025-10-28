@@ -52,6 +52,7 @@ export interface ProjectConfig {
  * @property {Record<string, unknown>} [configuration] - Optional server-specific configuration
  * @property {Record<string, string>} [env] - Optional environment settings
  * @property {string[]} extensions - File extensions handled by this server
+ * @property {string[]} [init] - Optional commands to run before starting language server
  * @property {ProjectConfig[]} projects - Array of projects using this language server
  * @property {object} [settings] - Optional runtime behavior settings
  */
@@ -62,10 +63,12 @@ export interface ServerConfig {
   configuration?: Record<string, unknown>;
   env?: Record<string, string>;
   extensions: string[];
+  init?: string[];
   projects: ProjectConfig[];
   settings?: {
     maxConcurrentFileReads?: number;
     messageRequest?: boolean;
+    preloadFiles?: boolean;
     rateLimitMaxRequests?: number;
     rateLimitWindowMs?: number;
     registrationRequest?: boolean;
@@ -172,6 +175,9 @@ export class Config {
       if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
         return false;
       }
+      if (serverConfig.init !== undefined && !Array.isArray(serverConfig.init)) {
+        return false;
+      }
       if (!Array.isArray(serverConfig.projects) || serverConfig.projects.length === 0) {
         return false;
       }
@@ -183,6 +189,9 @@ export class Config {
           return false;
         }
         if (serverConfig.settings.messageRequest !== undefined && typeof serverConfig.settings.messageRequest !== 'boolean') {
+          return false;
+        }
+        if (serverConfig.settings.preloadFiles !== undefined && typeof serverConfig.settings.preloadFiles !== 'boolean') {
           return false;
         }
         if (serverConfig.settings.rateLimitMaxRequests !== undefined && typeof serverConfig.settings.rateLimitMaxRequests !== 'number') {
@@ -260,10 +269,12 @@ export class Config {
    *   configuration?: Record<string, unknown>,
    *   env?: Record<string, string>,
    *   extensions: string[],
+   *   init?: string[],
    *   projects: ProjectConfig[],
    *   settings: {
    *     maxConcurrentFileReads: number,
    *     messageRequest: boolean,
+   *     preloadFiles: boolean,
    *     rateLimitMaxRequests: number,
    *     rateLimitWindowMs: number,
    *     registrationRequest: boolean,
@@ -280,10 +291,12 @@ export class Config {
     configuration?: Record<string, unknown>;
     env?: Record<string, string>;
     extensions: string[];
+    init?: string[];
     projects: ProjectConfig[];
     settings: {
       maxConcurrentFileReads: number;
       messageRequest: boolean;
+      preloadFiles: boolean;
       rateLimitMaxRequests: number;
       rateLimitWindowMs: number;
       registrationRequest: boolean;
@@ -304,6 +317,7 @@ export class Config {
         settings: {
           maxConcurrentFileReads: 10,
           messageRequest: true,
+          preloadFiles: true,
           rateLimitMaxRequests: 100,
           rateLimitWindowMs: 60000,
           registrationRequest: true,
@@ -320,10 +334,12 @@ export class Config {
       configuration: serverConfig.configuration,
       env: serverConfig.env,
       extensions: serverConfig.extensions,
+      init: serverConfig.init,
       projects: serverConfig.projects,
       settings: {
         maxConcurrentFileReads: serverConfig.settings?.maxConcurrentFileReads ?? 10,
         messageRequest: serverConfig.settings?.messageRequest ?? true,
+        preloadFiles: serverConfig.settings?.preloadFiles ?? true,
         rateLimitMaxRequests: serverConfig.settings?.rateLimitMaxRequests ?? 100,
         rateLimitWindowMs: serverConfig.settings?.rateLimitWindowMs ?? 60000,
         registrationRequest: serverConfig.settings?.registrationRequest ?? true,

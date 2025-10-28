@@ -12,7 +12,7 @@ A comprehensive MCP (Model Context Protocol) server that bridges Language Server
 
 ### Core Capabilities
 
-- **Multi-Language Support**: Kotlin, TypeScript, Python, Go, Helm, and more through configurable LSP servers
+- **Multi-Language Support**: Go, Helm, Kotlin, Python, Terraform, TypeScript, and [more](https://microsoft.github.io/language-server-protocol/implementors/servers/)
 - **Intelligent Code Analysis**: Symbol definitions, references, implementations, and type hierarchies
 - **Advanced Navigation**: Call hierarchies, document symbols, and workspace-wide symbol search
 - **Code Intelligence**: Hover information, completions, signature help, and inlay hints
@@ -58,6 +58,7 @@ A language server configuration has the following format:
       "extensions": [                               # Required language server extensions
         ".extension"
       ],
+      "init": [],                                   # Optional language server initialization commands
       "projects": [                                 # Required language server list of projects
         {
           "name": "project-name",                   # Required unique project name
@@ -79,6 +80,7 @@ A language server configuration has the following format:
       "settings": {                                 # Optional language server settings
         "maxConcurrentFileReads": 10,
         "messageRequest": false,
+        "preloadFiles": true,
         "rateLimitMaxRequests": 100,
         "rateLimitWindowMs": 60000,
         "registrationRequest": false,
@@ -116,6 +118,7 @@ These settings control LSP protocol behavior and server compatibility:
 
 - `maxConcurrentFileReads` - maximum number of files to read concurrently when opening project files, controls memory usage and performance during project initialization (default: `10`)
 - `messageRequest` - controls whether the language server can send `window/showMessage` requests to display user dialogs, disable for headless operation or automated environments (default: `true`)
+- `preloadFiles` - controls whether project files are loaded during or after project initialization (default: `true`)
 - `rateLimitMaxRequests` - maximum number of requests allowed per rate limit window, prevents overwhelming the language server with too many concurrent requests (default: `100`)
 - `rateLimitWindowMs` - time window in milliseconds for rate limiting, requests are counted within this sliding window (default: `60000` - 1 minute)
 - `registrationRequest` - controls whether the language server can send `client/registerCapability` requests to dynamically register capabilities, disable for servers that ignore client capability declarations (default: `true`)
@@ -125,7 +128,7 @@ These settings control LSP protocol behavior and server compatibility:
 
 #### Optional Language Server Project File Patterns
 
-File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot starting, `bin`, `build`, `cache`, `coverage`, `dist`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tmp`, and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
+File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot prefix, `__` double underscore prefix, `bin`, `build`, `cache`, `coverage`, `dist`, `docs`, `excludes`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tests`, `tmp`, `vendor` and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
 
 ## MCP Server Configuration
 

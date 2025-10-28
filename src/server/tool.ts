@@ -169,6 +169,12 @@ export class McpTool {
           line: { type: 'number', description: 'Line number (zero-based)' }
         },
         required: ['character', 'file_path', 'line']
+      },
+      _meta: {
+        usage: [
+          'Place cursor after trigger characters',
+          'Returns empty array when cursor is placed on whitespace'
+        ]
       }
     };
   }
@@ -626,6 +632,12 @@ export class McpTool {
           language_id: { type: 'string', description: 'Language identifier' }
         },
         required: ['language_id']
+      },
+      _meta: {
+        usage: [
+          'Field `supported` defines which tools can be used with language server',
+          'Returns capabilities metadata including tool definitions and usage notes'
+        ]
       }
     };
   }
