@@ -128,7 +128,7 @@ These settings control LSP protocol behavior and server compatibility:
 
 #### Optional Language Server Project File Patterns
 
-File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot starting, `bin`, `build`, `cache`, `coverage`, `dist`, `docs`, `excludes`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tmp`, and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
+File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot prefix, `__` double underscore prefix, `bin`, `build`, `cache`, `coverage`, `dist`, `docs`, `excludes`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tests`, `tmp`, `vendor` and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
 
 ## MCP Server Configuration
 
