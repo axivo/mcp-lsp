@@ -264,7 +264,6 @@ export class Client {
       return [];
     }
     const excludes = [
-      '__pycache__',
       'bin',
       'build',
       'cache',
@@ -280,6 +279,7 @@ export class Client {
       'temp',
       'tests',
       'tmp',
+      'vendor',
       'venv'
     ];
     const includePatterns = [extensions.length === 1 ? `**/*${extensions[0]}` : `**/*{${extensions.join(',')}}`];
@@ -292,7 +292,7 @@ export class Client {
         }
       }
     }
-    const excludePatterns: string[] = ['**/.*', ...excludes.map(pattern => `**/${pattern}`)];
+    const excludePatterns: string[] = ['**/.*', '**/__*', ...excludes.map(pattern => `**/${pattern}`)];
     if (patterns?.exclude && patterns.exclude.length) {
       for (const pattern of patterns.exclude) {
         excludePatterns.push(pattern);
