@@ -158,6 +158,39 @@
         }
       ]
     },
+    "terraform": {
+      "command": "terraform-ls",
+      "args": [
+        "serve"
+      ],
+      "configuration": {
+        "terraform": {
+          "path": "/opt/homebrew/bin/terraform"
+        },
+        "validation": {
+          "enableEnhancedValidation": true
+        }
+      },
+      "extensions": [
+        ".tf",
+        ".tfvars"
+      ],
+      "init": [
+        "/opt/homebrew/bin/terraform init"
+      ],
+      "projects": [
+        {
+          "name": "terraform-aws-eks",
+          "description": "A Terraform module to create Amazon EKS resources",
+          "url": "https://github.com/terraform-aws-modules/terraform-aws-eks",
+          "path": "/Users/floren/github/terraform-aws-eks"
+        }
+      ],
+      "settings": {
+        "preloadFiles": false,
+        "workspace": false
+      }
+    },
     "typescript": {
       "command": "typescript-language-server",
       "args": [
