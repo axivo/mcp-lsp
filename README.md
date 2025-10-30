@@ -79,14 +79,14 @@ A language server configuration has the following format:
       ],
       "settings": {                                 # Optional language server settings
         "maxConcurrentFileReads": 10,
-        "messageRequest": false,
+        "messageRequest": true,
         "preloadFiles": true,
         "rateLimitMaxRequests": 100,
         "rateLimitWindowMs": 60000,
-        "registrationRequest": false,
+        "registrationRequest": true,
         "shutdownGracePeriodMs": 100,
         "timeoutMs": 600000,
-        "workspace": false
+        "workspace": true
       }
     }
   }
@@ -128,7 +128,7 @@ These settings control LSP protocol behavior and server compatibility:
 
 #### Optional Language Server Project File Patterns
 
-File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot prefix, `__` double underscore prefix, `bin`, `build`, `cache`, `coverage`, `dist`, `docs`, `excludes`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tests`, `tmp`, `vendor` and `venv` directories are excluded. Use `include` patterns to add back specific directories (e.g., `**/dist` or `**/dist/**/*.d.ts`). Use `exclude` patterns to remove additional files (e.g., `**/*.test.js`).
+File patterns use [`fast-glob`](https://www.npmjs.com/package/fast-glob) syntax. By default, the `.` dot prefix, `__` double underscore prefix, `bin`, `build`, `cache`, `coverage`, `dist`, `docs`, `excludes`, `log`, `node_modules`, `obj`, `out`, `target`, `temp`, `tests`, `tmp`, `vendor` and `venv` directories are excluded. Use `include` or `exclude` patterns to manage specific directories or files (e.g., `**/dist`, `**/dist/**/*.d.ts`, `**/*.test.js`).
 
 ## MCP Server Configuration
 
@@ -190,7 +190,11 @@ To start performing a code review, ask Claude to:
 
 ### Claude's Review
 
-A [public session](https://claude.ai/share/cf7c67d3-64d1-4c56-8a29-e55234ebbcd5) using the [DEVELOPER](https://github.com/axivo/claude) profile demonstrates LSP tool capabilities and explains how semantic analysis provides compiler-accurate understanding compared to traditional text-based search methods.
+A [public session](https://claude.ai/share/d6a5809d-0703-4f16-9c2b-a4e8d639f227) using the [DEVELOPER](https://github.com/axivo/claude) profile demonstrates LSP tool capabilities and explains how semantic analysis provides compiler-accurate understanding compared to traditional text-based search methods.
+
+### Workflow Templates
+
+See the available [templates](.claude/templates) Claude can use for for systematic development workflows.
 
 ## MCP Tools
 
