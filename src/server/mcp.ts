@@ -638,7 +638,7 @@ export class McpServer {
   constructor(configPath: string) {
     this.query = '';
     this.client = new Client(configPath, this.query);
-    this.config = new Config(configPath);
+    this.config = Config.load(configPath);
     this.limit = 250;
     this.server = new Server(
       { name: 'language-server-protocol', version: this.client.version() },

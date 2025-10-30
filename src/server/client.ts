@@ -123,7 +123,7 @@ export class Client {
   private readonly execAsync = promisify(exec);
   private readonly readFileAsync = promisify(gracefulFs.readFile);
   private readonly readFileSync = gracefulFs.readFileSync;
-
+  private static readonly FallbackFilesLimit = 10;
 
   /**
    * Creates a new Client instance
@@ -132,7 +132,7 @@ export class Client {
    * @param {string} query - Default query
    */
   constructor(configPath: string, query: string) {
-    this.config = new Config(configPath);
+    this.config = Config.load(configPath);
     this.query = query;
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
@@ -550,7 +550,7 @@ export class Client {
         ]);
         clearTimeout(timeoutId);
       } catch (error) {
-        const fallbackFiles = files.slice(0, Math.min(10, files.length));
+        const fallbackFiles = files.slice(0, Math.min(Client.FallbackFilesLimit, files.length));
         const fallbackPromises = fallbackFiles.map(file =>
           fileReadLimit(() => this.openFile(languageId, project, file))
         );

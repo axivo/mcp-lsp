@@ -55,7 +55,7 @@
       "projects": [
         {
           "name": "helm",
-          "description": "A Kubernetes package manager",
+          "description": "A Kubernetes package manager.",
           "url": "https://github.com/helm/helm",
           "path": "/Users/username/github/helm"
         }
@@ -119,7 +119,7 @@
       "projects": [
         {
           "name": "ktor",
-          "description": "Framework for quickly creating connected applications in Kotlin.",
+          "description": "A framework for quickly creating connected applications in Kotlin.",
           "url": "https://github.com/ktorio/ktor",
           "path": "/Users/username/github/ktor"
         }
@@ -180,9 +180,9 @@
       "projects": [
         {
           "name": "terraform-aws-eks",
-          "description": "A Terraform module to create Amazon EKS resources",
+          "description": "A Terraform module to create Amazon EKS resources.",
           "url": "https://github.com/terraform-aws-modules/terraform-aws-eks",
-          "path": "/Users/floren/github/terraform-aws-eks"
+          "path": "/Users/username/github/terraform-aws-eks"
         }
       ],
       "settings": {
