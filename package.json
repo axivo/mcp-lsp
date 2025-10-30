@@ -1,6 +1,6 @@
 {
   "name": "@axivo/mcp-lsp",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "type": "module",
   "description": "MCP server for Language Server Protocol integration",
   "keywords": [

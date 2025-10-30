@@ -174,7 +174,7 @@ To switch projects, restart the language server with the desired project name.
 
 ## Getting Started
 
-You can ask Claude to explain how the LSP tools work:
+Ask Claude to explain how the LSP tools work:
 
 - *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
 - *Please explain how LSP tools help you understand and review source code.*
@@ -182,8 +182,8 @@ You can ask Claude to explain how the LSP tools work:
 To start performing a code review, ask Claude to:
 
 - *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
-- *Next, see the project files you can work with, prior any code review.*
-- *Next, perform a detailed review of project source code using the LSP tools and let me know your findings.*
+- *Read the `/Users/username/github/mcp-lsp/.claude/templates/code-review.md` template prior code review.*
+- *Perform a detailed review of project source code using the LSP tools and let me know your findings.*
 
 > [!NOTE]
 > Language server start time varies by language and project size, typically few seconds for a project with thousands of files. Some language servers like `Kotlin` may take several minutes to initialize large projects. Increase `timeoutMs` value accordingly, if default timeout is reached.
@@ -194,7 +194,7 @@ A [public session](https://claude.ai/share/d6a5809d-0703-4f16-9c2b-a4e8d639f227)
 
 ### Workflow Templates
 
-See the available [templates](.claude/templates) Claude can use for for systematic development workflows.
+See the available [templates](.claude/templates) Claude can use for systematic development workflows.
 
 ## MCP Tools
 
