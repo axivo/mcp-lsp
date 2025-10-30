@@ -8,6 +8,7 @@
 
 import { readFileSync } from 'node:fs';
 import { ClientCapabilities } from 'vscode-languageserver-protocol';
+import { z } from 'zod';
 
 /**
  * Top-level configuration structure for all language servers
@@ -89,157 +90,84 @@ export interface ServerConfig {
  */
 export class Config {
   private config: GlobalConfig;
+  private static readonly ProjectConfigSchema = z.object({
+    description: z.string().optional(),
+    name: z.string().min(1),
+    path: z.string().min(1),
+    patterns: z.object({
+      exclude: z.array(z.string()).optional(),
+      include: z.array(z.string()).optional()
+    }).optional(),
+    url: z.string().optional()
+  });
+  private static readonly ServerConfigSchema = z.object({
+    args: z.array(z.string()),
+    capabilities: z.record(z.string(), z.unknown()).optional(),
+    command: z.string().min(1),
+    configuration: z.record(z.string(), z.unknown()).optional(),
+    env: z.record(z.string(), z.string()).optional(),
+    extensions: z.array(z.string()).min(1),
+    init: z.array(z.string()).optional(),
+    projects: z.array(Config.ProjectConfigSchema).min(1),
+    settings: z.object({
+      maxConcurrentFileReads: z.number().optional(),
+      messageRequest: z.boolean().optional(),
+      preloadFiles: z.boolean().optional(),
+      rateLimitMaxRequests: z.number().optional(),
+      rateLimitWindowMs: z.number().optional(),
+      registrationRequest: z.boolean().optional(),
+      shutdownGracePeriodMs: z.number().optional(),
+      timeoutMs: z.number().optional(),
+      workspace: z.boolean().optional()
+    }).optional()
+  });
+  private static readonly ConfigSchema = z.object({
+    servers: z.record(z.string(), Config.ServerConfigSchema).refine(
+      (servers) => Object.keys(servers).length > 0,
+      { message: 'At least one language server configuration is required.' }
+    )
+  });
 
   /**
-   * Creates a new Config instance and loads configuration
+   * Creates a new Config instance with validated configuration
    * 
-   * Automatically parses and validates the configuration file on instantiation,
-   * providing safe access to language server settings with fallback handling.
+   * Private constructor ensures all instances are created through the static
+   * factory method, guaranteeing proper validation before instantiation.
    * 
-   * @param {string} configPath - Absolute or relative path to the LSP configuration JSON file
+   * @private
+   * @param {GlobalConfig} config - Pre-validated configuration object
    */
-  constructor(configPath: string) {
-    this.config = this.loadConfig(configPath);
+  private constructor(config: GlobalConfig) {
+    this.config = config;
   }
 
   /**
-   * Loads and parses the configuration file with error handling
+   * Load and validate configuration from file
    * 
-   * Reads JSON configuration file, validates structure and content,
-   * and returns safe configuration object with fallback on any errors.
+   * Reads JSON configuration file, validates structure and content using Zod schema,
+   * and returns validated Config instance. Provides detailed error messages for
+   * validation failures.
    * 
-   * @private
-   * @param {string} configPath - Path to the JSON configuration file
-   * @returns {GlobalConfig} Parsed and validated configuration or empty fallback
+   * @static
+   * @param {string} configPath - Absolute path to configuration JSON file
+   * @returns {Config} Validated Config instance
+   * @throws {Error} If file cannot be read or configuration is invalid
    */
-  private loadConfig(configPath: string): GlobalConfig {
-    const emptyConfig = { servers: {} };
+  static load(configPath: string): Config {
     try {
-      const configContent = readFileSync(configPath, 'utf8');
-      const config = JSON.parse(configContent);
-      if (!this.validate(config)) {
-        return emptyConfig;
-      }
-      return config;
+      const configData = readFileSync(configPath, 'utf-8');
+      const parsedData = JSON.parse(configData);
+      const validatedConfig = Config.ConfigSchema.parse(parsedData);
+      return new Config(validatedConfig);
     } catch (error) {
-      return emptyConfig;
+      if (error instanceof z.ZodError) {
+        const errors = error.issues.map((e: z.core.$ZodIssue) =>
+          `${e.path.join('.')}: ${e.message}`
+        ).join(', ');
+        throw new Error(`Failed to load '${configPath}' configuration file: ${errors}`);
+      }
+      throw new Error(`Failed to load '${configPath}' configuration file: ${error}`);
     }
-  }
-
-  /**
-   * Validates comprehensive configuration structure and content rules
-   * 
-   * Performs deep validation of configuration including server definitions,
-   * project paths, file extensions, settings types, and pattern configurations
-   * to ensure runtime safety and proper LSP server initialization.
-   * 
-   * @private
-   * @param {GlobalConfig} config - Configuration object to validate against schema
-   * @returns {boolean} True if configuration meets all validation requirements, false otherwise
-   */
-  private validate(config: GlobalConfig): boolean {
-    if (!config || typeof config !== 'object') {
-      return false;
-    }
-    if (!config.servers || typeof config.servers !== 'object') {
-      return false;
-    }
-    if (Object.keys(config.servers).length === 0) {
-      return false;
-    }
-    for (const serverConfig of Object.values(config.servers)) {
-      if (!serverConfig || typeof serverConfig !== 'object') {
-        return false;
-      }
-      if (!Array.isArray(serverConfig.args)) {
-        return false;
-      }
-      if (typeof serverConfig.command !== 'string' || serverConfig.command.trim() === '') {
-        return false;
-      }
-      if (serverConfig.capabilities !== undefined &&
-        (typeof serverConfig.capabilities !== 'object' || serverConfig.capabilities === null || Array.isArray(serverConfig.capabilities))
-      ) {
-        return false;
-      }
-      if (serverConfig.configuration !== undefined &&
-        (typeof serverConfig.configuration !== 'object' || serverConfig.configuration === null || Array.isArray(serverConfig.configuration))
-      ) {
-        return false;
-      }
-      if (serverConfig.env !== undefined &&
-        (typeof serverConfig.env !== 'object' || serverConfig.env === null || Array.isArray(serverConfig.env))
-      ) {
-        return false;
-      }
-      if (!Array.isArray(serverConfig.extensions) || serverConfig.extensions.length === 0) {
-        return false;
-      }
-      if (serverConfig.init !== undefined && !Array.isArray(serverConfig.init)) {
-        return false;
-      }
-      if (!Array.isArray(serverConfig.projects) || serverConfig.projects.length === 0) {
-        return false;
-      }
-      if (serverConfig.settings !== undefined) {
-        if (typeof serverConfig.settings !== 'object' || serverConfig.settings === null || Array.isArray(serverConfig.settings)) {
-          return false;
-        }
-        if (serverConfig.settings.maxConcurrentFileReads !== undefined && typeof serverConfig.settings.maxConcurrentFileReads !== 'number') {
-          return false;
-        }
-        if (serverConfig.settings.messageRequest !== undefined && typeof serverConfig.settings.messageRequest !== 'boolean') {
-          return false;
-        }
-        if (serverConfig.settings.preloadFiles !== undefined && typeof serverConfig.settings.preloadFiles !== 'boolean') {
-          return false;
-        }
-        if (serverConfig.settings.rateLimitMaxRequests !== undefined && typeof serverConfig.settings.rateLimitMaxRequests !== 'number') {
-          return false;
-        }
-        if (serverConfig.settings.rateLimitWindowMs !== undefined && typeof serverConfig.settings.rateLimitWindowMs !== 'number') {
-          return false;
-        }
-        if (serverConfig.settings.registrationRequest !== undefined && typeof serverConfig.settings.registrationRequest !== 'boolean') {
-          return false;
-        }
-        if (serverConfig.settings.shutdownGracePeriodMs !== undefined && typeof serverConfig.settings.shutdownGracePeriodMs !== 'number') {
-          return false;
-        }
-        if (serverConfig.settings.timeoutMs !== undefined && typeof serverConfig.settings.timeoutMs !== 'number') {
-          return false;
-        }
-        if (serverConfig.settings.workspace !== undefined && typeof serverConfig.settings.workspace !== 'boolean') {
-          return false;
-        }
-      }
-      for (const project of serverConfig.projects) {
-        if (!project || typeof project !== 'object') {
-          return false;
-        }
-        if (typeof project.name !== 'string' || project.name.trim() === '') {
-          return false;
-        }
-        if (project.description !== undefined && (typeof project.description !== 'string' || project.description.trim() === '')) {
-          return false;
-        }
-        if (project.patterns !== undefined) {
-          if (typeof project.patterns !== 'object' || project.patterns === null || Array.isArray(project.patterns)) {
-            return false;
-          }
-          if (project.patterns.exclude !== undefined && !Array.isArray(project.patterns.exclude)) {
-            return false;
-          }
-          if (project.patterns.include !== undefined && !Array.isArray(project.patterns.include)) {
-            return false;
-          }
-        }
-        if (typeof project.path !== 'string' || project.path.trim() === '') {
-          return false;
-        }
-      }
-    }
-    return true;
   }
 
   /**
