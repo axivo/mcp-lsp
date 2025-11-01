@@ -132,7 +132,7 @@ export class Client {
    * @param {string} query - Default query
    */
   constructor(configPath: string, query: string) {
-    this.config = Config.load(configPath);
+    this.config = Config.validate(configPath);
     this.query = query;
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());

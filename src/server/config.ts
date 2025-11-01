@@ -142,7 +142,7 @@ export class Config {
   }
 
   /**
-   * Load and validate configuration from file
+   * Validates configuration from file
    * 
    * Reads JSON configuration file, validates structure and content using Zod schema,
    * and returns validated Config instance. Provides detailed error messages for
@@ -153,7 +153,7 @@ export class Config {
    * @returns {Config} Validated Config instance
    * @throws {Error} If file cannot be read or configuration is invalid
    */
-  static load(configPath: string): Config {
+  static validate(configPath: string): Config {
     try {
       const configData = readFileSync(configPath, 'utf-8');
       const parsedData = JSON.parse(configData);
