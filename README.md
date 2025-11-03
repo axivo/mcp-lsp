@@ -192,6 +192,9 @@ See the available [templates](.claude/templates) Claude can use for systematic d
 
 ## MCP Tools
 
+> [!NOTE]
+> See the [CHANGELOG](CHANGELOG.md) for version history and release details.
+
 ### Server Management Tools
 
 1. **`start_server`**
