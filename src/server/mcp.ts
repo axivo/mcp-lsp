@@ -134,8 +134,13 @@ interface GetDiagnostics extends FilePath { }
  * 
  * @interface GetCompletions
  * @extends Position
+ * @property {number} [limit] - Maximum number of completions to return
+ * @property {number} [offset] - Pagination offset for completion listing
  */
-interface GetCompletions extends Position { }
+interface GetCompletions extends Position {
+  limit?: number;
+  offset?: number;
+}
 
 /**
  * Parameters for folding range identification requests
@@ -790,11 +795,21 @@ export class McpServer {
     if (error) {
       return error;
     }
+    const timer = Date.now();
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    const fullResult = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
+      return this.client.response(fullResult);
+    }
+    const description = `Showing completions for '${args.file_path}' file.`;
+    const elapsed = Date.now() - timer;
+    return this.paginatedResponse(fullResult, args, description, {
+      file_path: args.file_path,
+      time: `${elapsed}ms`
+    });
   }
 
   /**

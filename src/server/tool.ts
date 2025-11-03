@@ -166,7 +166,9 @@ export class McpTool {
         properties: {
           character: { type: 'number', description: 'Character position (zero-based)' },
           file_path: { type: 'string', description: 'Path to the project file' },
-          line: { type: 'number', description: 'Line number (zero-based)' }
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          limit: { type: 'number', description: 'Pagination limit for number of completions to return', default: this.limit },
+          offset: { type: 'number', description: 'Pagination offset for number of completions to skip', default: 0 }
         },
         required: ['character', 'file_path', 'line']
       },
