@@ -78,15 +78,12 @@ A language server configuration has the following format:
         }
       ],
       "settings": {                                 # Optional language server settings
+        "loggingLevel": "info",
         "maxConcurrentFileReads": 10,
-        "messageRequest": true,
-        "preloadFiles": true,
         "rateLimitMaxRequests": 100,
         "rateLimitWindowMs": 60000,
-        "registrationRequest": true,
         "shutdownGracePeriodMs": 100,
-        "timeoutMs": 600000,
-        "workspace": true
+        "timeoutMs": 600000
       }
     }
   }
@@ -116,15 +113,12 @@ For example, `pyright-langserver` requires the following settings:
 
 These settings control LSP protocol behavior and server compatibility:
 
+- `loggingLevel` - language server logging verbosity with `debug`, `info`, `warning` and `error` supported levels (default: `info`)
 - `maxConcurrentFileReads` - maximum number of files to read concurrently when opening project files, controls memory usage and performance during project initialization (default: `10`)
-- `messageRequest` - controls whether the language server can send `window/showMessage` requests to display user dialogs, disable for headless operation or automated environments (default: `true`)
-- `preloadFiles` - controls whether project files are loaded during or after project initialization (default: `true`)
 - `rateLimitMaxRequests` - maximum number of requests allowed per rate limit window, prevents overwhelming the language server with too many concurrent requests (default: `100`)
-- `rateLimitWindowMs` - time window in milliseconds for rate limiting, requests are counted within this sliding window (default: `60000` - 1 minute)
-- `registrationRequest` - controls whether the language server can send `client/registerCapability` requests to dynamically register capabilities, disable for servers that ignore client capability declarations (default: `true`)
+- `rateLimitWindowMs` - time window in milliseconds for rate limiting, requests are counted within this sliding window (default: `60000`)
 - `shutdownGracePeriodMs` - time in milliseconds to wait after sending shutdown request before forcing process termination, allows language server to complete cleanup operations (default: `100`)
-- `timeoutMs` - maximum time in milliseconds to wait for language server initialization, prevents hanging on unresponsive servers (default: `600000` - 10 minutes)
-- `workspace` - controls whether the language server initialization sends `workspace/symbol` requests to test workspace capabilities, disable for servers that don't support workspace operations or cause initialization failures (default: `true`)
+- `timeoutMs` - maximum time in milliseconds to wait for language server initialization, prevents hanging on unresponsive servers (default: `600000`)
 
 #### Optional Language Server Project File Patterns
 
@@ -177,13 +171,13 @@ To switch projects, restart the language server with the desired project name.
 Ask Claude to explain how the LSP tools work:
 
 - *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
-- *Please explain how LSP tools help you understand and review source code.*
+- *Please explain how the supported LSP tools help you understand and review source code.*
 
 To start performing a code review, ask Claude to:
 
 - *Start the TypeScript language server with `typescript-sdk` project and check the server capabilities.*
 - *Read the `/Users/username/github/mcp-lsp/.claude/templates/code-review.md` template prior code review.*
-- *Perform a detailed review of project source code using the LSP tools and let me know your findings.*
+- *Perform a detailed review of project source code, using the code review template and supported LSP tools.*
 
 > [!NOTE]
 > Language server start time varies by language and project size, typically few seconds for a project with thousands of files. Some language servers like `Kotlin` may take several minutes to initialize large projects. Increase `timeoutMs` value accordingly, if default timeout is reached.
