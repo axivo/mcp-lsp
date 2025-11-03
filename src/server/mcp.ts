@@ -73,6 +73,7 @@ import {
 import { z } from 'zod';
 import { Client, Response } from './client.js';
 import { Config } from './config.js';
+import { Logger } from './logger.js';
 import { McpTool } from './tool.js';
 
 /**
@@ -621,6 +622,7 @@ export class McpServer {
   private client: Client;
   private config: Config;
   private limit: number;
+  private logger: Logger;
   private query: string;
   private server: Server;
   private tool: McpTool;
@@ -636,14 +638,15 @@ export class McpServer {
    * @param {string} configPath - Path to the LSP configuration JSON file
    */
   constructor(configPath: string) {
-    this.query = '';
-    this.client = new Client(configPath, this.query);
-    this.config = Config.validate(configPath);
     this.limit = 250;
+    this.query = '';
     this.server = new Server(
-      { name: 'language-server-protocol', version: this.client.version() },
-      { capabilities: { tools: {} } }
+      { name: 'mcp-lsp', version: Client.version() },
+      { capabilities: { logging: {}, tools: {} } }
     );
+    this.config = Config.validate(configPath);
+    this.logger = new Logger(this.config, this.server);
+    this.client = new Client(this.config, this.logger, this.query);
     this.tool = new McpTool(this.limit, this.query);
     this.toolHandler = new Map<string, ToolHandler>();
     this.setupToolHandlers();

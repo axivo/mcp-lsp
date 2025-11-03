@@ -37,12 +37,7 @@
             ]
           }
         }
-      ],
-      "settings": {
-        "messageRequest": false,
-        "registrationRequest": false,
-        "workspace": false
-      }
+      ]
     },
     "go": {
       "command": "gopls",
@@ -184,11 +179,7 @@
           "url": "https://github.com/terraform-aws-modules/terraform-aws-eks",
           "path": "/Users/username/github/terraform-aws-eks"
         }
-      ],
-      "settings": {
-        "preloadFiles": false,
-        "workspace": false
-      }
+      ]
     },
     "typescript": {
       "command": "typescript-language-server",

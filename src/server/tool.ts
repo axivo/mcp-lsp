@@ -636,7 +636,8 @@ export class McpTool {
       _meta: {
         usage: [
           'Field `supported` defines which tools can be used with language server',
-          'Returns capabilities metadata including tool definitions and usage notes'
+          'Returns capabilities metadata including tool definitions and usage notes',
+          'Returns tools that can be used with language server'
         ]
       }
     };
