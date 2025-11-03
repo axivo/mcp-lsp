@@ -746,6 +746,9 @@ export class Client {
   /**
    * Gets the project name for a specific language ID
    * 
+   * Retrieves the currently active project name associated with a language server.
+   * Returns undefined if no project is running for the specified language.
+   * 
    * @param {string} languageId - Language identifier
    * @returns {string | undefined} Project name for the language, or undefined if not found
    */
@@ -756,9 +759,12 @@ export class Client {
   /**
    * Gets the cached project files for a specific project
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @returns {Promise<string[] | null>} Promise that resolves with array of file paths or null if not found
+   * Retrieves the list of discovered files from cache or performs file discovery
+   * if cache is empty. Returns null if server or project configuration is invalid.
+   * 
+   * @param {string} languageId - Language identifier for server configuration lookup
+   * @param {string} project - Project name to retrieve files for
+   * @returns {Promise<string[] | null>} Promise that resolves with array of absolute file paths, or null if configuration invalid
    */
   async getProjectFiles(languageId: string, project: string): Promise<string[] | null> {
     if (!this.config.hasServerConfig(languageId)) {
@@ -779,9 +785,12 @@ export class Client {
 
   /**
    * Gets server capabilities for a specific language server
-   *
-   * @param {string} languageId - Language identifier
-   * @returns {ServerCapabilities | undefined} Server capabilities or undefined if not available
+   * 
+   * Retrieves LSP capabilities from initialized server connection.
+   * Returns undefined if server is not running or not yet initialized.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {ServerCapabilities | undefined} LSP server capabilities object, or undefined if server not available or not initialized
    */
   getServerCapabilities(languageId: string): ServerCapabilities | undefined {
     const project = this.projectId.get(languageId);
@@ -799,8 +808,11 @@ export class Client {
   /**
    * Gets server connection for status checking
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {ServerConnection | undefined} Server connection or undefined
+   * Retrieves the active server connection object including process and initialization state.
+   * Used primarily for status monitoring and diagnostic operations.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {ServerConnection | undefined} Server connection with process and state information, or undefined if not running
    */
   getServerConnection(languageId: string): ServerConnection | undefined {
     const project = this.projectId.get(languageId);
@@ -813,7 +825,10 @@ export class Client {
   /**
    * Gets all configured servers
    * 
-   * @returns {string[]} Array of servers
+   * Retrieves the complete list of language server identifiers from configuration.
+   * Includes both running and non-running servers.
+   * 
+   * @returns {string[]} Array of language server identifiers from configuration
    */
   getServers(): string[] {
     return this.config.getServers();
@@ -822,8 +837,11 @@ export class Client {
   /**
    * Gets the uptime of a specific language server in milliseconds
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {number} Uptime in milliseconds, or 0 if server not running
+   * Calculates elapsed time since server startup using cached start timestamp.
+   * Returns zero if server is not currently running.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {number} Server uptime in milliseconds since startup, or 0 if server not running
    */
   getServerUptime(languageId: string): number {
     const project = this.projectId.get(languageId);
@@ -839,9 +857,12 @@ export class Client {
   /**
    * Checks if a language server is alive and can handle the specified project path
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} path - Project path to validate against server configuration
-   * @returns {boolean} True if server is alive and can handle the project
+   * Validates that the server is running and that the specified path falls within
+   * the server's configured project path. Used for routing file requests to appropriate servers.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @param {string} path - Absolute file or project path to validate against server configuration
+   * @returns {boolean} True if server is running and path is within server's project scope, false otherwise
    */
   isServerAlive(languageId: string, path: string): boolean {
     const project = this.projectId.get(languageId);
@@ -856,8 +877,11 @@ export class Client {
   /**
    * Checks if a specific language server is currently running
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {boolean} True if server is running
+   * Verifies that a server process exists and has an active connection.
+   * Does not check initialization or readiness state.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {boolean} True if server process is running with active connection, false otherwise
    */
   isServerRunning(languageId: string): boolean {
     const project = this.projectId.get(languageId);
