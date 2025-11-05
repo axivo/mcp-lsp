@@ -67,15 +67,12 @@ export interface ServerConfig {
   init?: string[];
   projects: ProjectConfig[];
   settings?: {
+    loggingLevel?: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency';
     maxConcurrentFileReads?: number;
-    messageRequest?: boolean;
-    preloadFiles?: boolean;
     rateLimitMaxRequests?: number;
     rateLimitWindowMs?: number;
-    registrationRequest?: boolean;
     shutdownGracePeriodMs?: number;
     timeoutMs?: number;
-    workspace?: boolean;
   };
 }
 
@@ -110,15 +107,12 @@ export class Config {
     init: z.array(z.string()).optional(),
     projects: z.array(Config.ProjectConfigSchema).min(1),
     settings: z.object({
+      loggingLevel: z.enum(['debug', 'info', 'notice', 'warning', 'error', 'critical', 'alert', 'emergency']).optional(),
       maxConcurrentFileReads: z.number().optional(),
-      messageRequest: z.boolean().optional(),
-      preloadFiles: z.boolean().optional(),
       rateLimitMaxRequests: z.number().optional(),
       rateLimitWindowMs: z.number().optional(),
-      registrationRequest: z.boolean().optional(),
       shutdownGracePeriodMs: z.number().optional(),
       timeoutMs: z.number().optional(),
-      workspace: z.boolean().optional()
     }).optional()
   });
   private static readonly ConfigSchema = z.object({
@@ -142,7 +136,7 @@ export class Config {
   }
 
   /**
-   * Load and validate configuration from file
+   * Validates configuration from file
    * 
    * Reads JSON configuration file, validates structure and content using Zod schema,
    * and returns validated Config instance. Provides detailed error messages for
@@ -153,7 +147,7 @@ export class Config {
    * @returns {Config} Validated Config instance
    * @throws {Error} If file cannot be read or configuration is invalid
    */
-  static load(configPath: string): Config {
+  static validate(configPath: string): Config {
     try {
       const configData = readFileSync(configPath, 'utf-8');
       const parsedData = JSON.parse(configData);
@@ -200,15 +194,12 @@ export class Config {
    *   init?: string[],
    *   projects: ProjectConfig[],
    *   settings: {
+   *     loggingLevel?: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency',
    *     maxConcurrentFileReads: number,
-   *     messageRequest: boolean,
-   *     preloadFiles: boolean,
    *     rateLimitMaxRequests: number,
    *     rateLimitWindowMs: number,
-   *     registrationRequest: boolean,
    *     shutdownGracePeriodMs: number,
-   *     timeoutMs: number,
-   *     workspace: boolean
+   *     timeoutMs: number
    *   }
    * }} Complete server configuration with applied defaults
    */
@@ -222,15 +213,12 @@ export class Config {
     init?: string[];
     projects: ProjectConfig[];
     settings: {
+      loggingLevel?: 'debug' | 'info' | 'notice' | 'warning' | 'error' | 'critical' | 'alert' | 'emergency';
       maxConcurrentFileReads: number;
-      messageRequest: boolean;
-      preloadFiles: boolean;
       rateLimitMaxRequests: number;
       rateLimitWindowMs: number;
-      registrationRequest: boolean;
       shutdownGracePeriodMs: number;
       timeoutMs: number;
-      workspace: boolean;
     };
   } {
     const serverConfig = this.config.servers[languageId];
@@ -244,14 +232,10 @@ export class Config {
         projects: [],
         settings: {
           maxConcurrentFileReads: 10,
-          messageRequest: true,
-          preloadFiles: true,
           rateLimitMaxRequests: 100,
           rateLimitWindowMs: 60000,
-          registrationRequest: true,
           shutdownGracePeriodMs: 100,
-          timeoutMs: 600000,
-          workspace: true
+          timeoutMs: 600000
         }
       };
     }
@@ -265,15 +249,12 @@ export class Config {
       init: serverConfig.init,
       projects: serverConfig.projects,
       settings: {
+        loggingLevel: serverConfig.settings?.loggingLevel,
         maxConcurrentFileReads: serverConfig.settings?.maxConcurrentFileReads ?? 10,
-        messageRequest: serverConfig.settings?.messageRequest ?? true,
-        preloadFiles: serverConfig.settings?.preloadFiles ?? true,
         rateLimitMaxRequests: serverConfig.settings?.rateLimitMaxRequests ?? 100,
         rateLimitWindowMs: serverConfig.settings?.rateLimitWindowMs ?? 60000,
-        registrationRequest: serverConfig.settings?.registrationRequest ?? true,
         shutdownGracePeriodMs: serverConfig.settings?.shutdownGracePeriodMs ?? 100,
-        timeoutMs: serverConfig.settings?.timeoutMs ?? 600000,
-        workspace: serverConfig.settings?.workspace ?? true
+        timeoutMs: serverConfig.settings?.timeoutMs ?? 600000
       }
     };
   }

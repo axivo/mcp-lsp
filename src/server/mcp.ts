@@ -73,6 +73,7 @@ import {
 import { z } from 'zod';
 import { Client, Response } from './client.js';
 import { Config } from './config.js';
+import { Logger } from './logger.js';
 import { McpTool } from './tool.js';
 
 /**
@@ -133,8 +134,13 @@ interface GetDiagnostics extends FilePath { }
  * 
  * @interface GetCompletions
  * @extends Position
+ * @property {number} [limit] - Maximum number of completions to return
+ * @property {number} [offset] - Pagination offset for completion listing
  */
-interface GetCompletions extends Position { }
+interface GetCompletions extends Position {
+  limit?: number;
+  offset?: number;
+}
 
 /**
  * Parameters for folding range identification requests
@@ -621,6 +627,7 @@ export class McpServer {
   private client: Client;
   private config: Config;
   private limit: number;
+  private logger: Logger;
   private query: string;
   private server: Server;
   private tool: McpTool;
@@ -636,14 +643,15 @@ export class McpServer {
    * @param {string} configPath - Path to the LSP configuration JSON file
    */
   constructor(configPath: string) {
-    this.query = '';
-    this.client = new Client(configPath, this.query);
-    this.config = Config.load(configPath);
     this.limit = 250;
+    this.query = '';
     this.server = new Server(
-      { name: 'language-server-protocol', version: this.client.version() },
-      { capabilities: { tools: {} } }
+      { name: 'mcp-lsp', version: Client.version() },
+      { capabilities: { logging: {}, tools: {} } }
     );
+    this.config = Config.validate(configPath);
+    this.logger = new Logger(this.config, this.server);
+    this.client = new Client(this.config, this.logger, this.query);
     this.tool = new McpTool(this.limit, this.query);
     this.toolHandler = new Map<string, ToolHandler>();
     this.setupToolHandlers();
@@ -698,7 +706,9 @@ export class McpServer {
    */
   private async getCallHierarchy(args: GetCallHierarchy): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: CallHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -718,7 +728,9 @@ export class McpServer {
    */
   private async getCodeActions(args: GetCodeActions): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: CodeActionParams = {
       context: { diagnostics: [] },
       range: {
@@ -742,7 +754,9 @@ export class McpServer {
    */
   private async getCodeResolves(args: GetCodeResolves): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     return await this.client.sendServerRequest(args.file_path, CodeActionResolveRequest.method, args.item);
   }
 
@@ -757,7 +771,9 @@ export class McpServer {
    */
   private async getColors(args: GetColors): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -776,12 +792,24 @@ export class McpServer {
    */
   private async getCompletions(args: GetCompletions): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
+    const timer = Date.now();
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
     };
-    return await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    const fullResult = await this.client.sendServerRequest(args.file_path, CompletionRequest.method, params);
+    if (typeof fullResult === 'string' || !Array.isArray(fullResult)) {
+      return this.client.response(fullResult);
+    }
+    const description = `Showing completions for '${args.file_path}' file.`;
+    const elapsed = Date.now() - timer;
+    return this.paginatedResponse(fullResult, args, description, {
+      file_path: args.file_path,
+      time: `${elapsed}ms`
+    });
   }
 
   /**
@@ -796,7 +824,9 @@ export class McpServer {
    */
   private async getDiagnostics(args: GetDiagnostics): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -815,7 +845,9 @@ export class McpServer {
    */
   private async getFoldingRanges(args: GetFoldingRanges): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -834,7 +866,9 @@ export class McpServer {
    */
   private async getFormat(args: GetFormat): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       options: { tabSize: 2, insertSpaces: true },
       textDocument: { uri: `file://${args.file_path}` }
@@ -854,7 +888,9 @@ export class McpServer {
    */
   private async getHighlights(args: GetHighlights): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -874,7 +910,9 @@ export class McpServer {
    */
   private async getHover(args: GetHover): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -894,7 +932,9 @@ export class McpServer {
    */
   private async getImplementations(args: GetImplementations): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'character', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -914,7 +954,9 @@ export class McpServer {
    */
   private async getIncomingCalls(args: GetIncomingCalls): Promise<unknown> {
     const error = this.validate(args, ['item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: CallHierarchyIncomingCallsParams = {
       item: args.item
     };
@@ -934,7 +976,9 @@ export class McpServer {
    */
   private async getInlayHint(args: GetInlayHint): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     return await this.client.sendServerRequest(args.file_path, InlayHintResolveRequest.method, args.item);
   }
 
@@ -950,7 +994,9 @@ export class McpServer {
    */
   private async getInlayHints(args: GetInlayHints): Promise<unknown> {
     const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: InlayHintParams = {
       range: {
         start: { character: args.start_character, line: args.start_line },
@@ -973,7 +1019,9 @@ export class McpServer {
    */
   private async getLinkedEditingRange(args: GetLinkedEditingRange): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: LinkedEditingRangeParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -993,7 +1041,9 @@ export class McpServer {
    */
   private async getLinkResolves(args: GetLinkResolves): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     return await this.client.sendServerRequest(args.file_path, DocumentLinkResolveRequest.method, args.item);
   }
 
@@ -1009,7 +1059,9 @@ export class McpServer {
    */
   private async getLinks(args: GetLinks): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1028,7 +1080,9 @@ export class McpServer {
    */
   private async getOutgoingCalls(args: GetOutgoingCalls): Promise<unknown> {
     const error = this.validate(args, ['item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: CallHierarchyOutgoingCallsParams = {
       item: args.item
     };
@@ -1048,7 +1102,9 @@ export class McpServer {
    */
   private async getProjectFiles(args: GetProjectFiles): Promise<unknown> {
     const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
     }
@@ -1078,7 +1134,9 @@ export class McpServer {
    */
   private async getProjectSymbols(args: GetProjectSymbols): Promise<unknown> {
     const error = this.validate(args, ['language_id', 'project', 'query']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const timer = Date.now();
     if (args.project !== this.client.getProjectId(args.language_id)) {
       return `Language server '${args.language_id}' for project '${args.project}' is not running.`;
@@ -1111,7 +1169,9 @@ export class McpServer {
    */
   private async getRangeFormat(args: GetRangeFormat): Promise<unknown> {
     const error = this.validate(args, ['end_character', 'end_line', 'file_path', 'start_character', 'start_line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       options: { tabSize: 2, insertSpaces: true },
       range: {
@@ -1135,7 +1195,9 @@ export class McpServer {
    */
   private async getResolves(args: GetResolves): Promise<unknown> {
     const error = this.validate(args, ['file_path', 'item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params = {
       ...args.item,
       uri: `file://${args.file_path}`
@@ -1155,7 +1217,9 @@ export class McpServer {
    */
   private async getSelectionRange(args: GetSelectionRange): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: SelectionRangeParams = {
       positions: [{ character: args.character, line: args.line }],
       textDocument: { uri: `file://${args.file_path}` }
@@ -1175,7 +1239,9 @@ export class McpServer {
    */
   private async getSemanticTokens(args: GetSemanticTokens): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: SemanticTokensParams = {
       textDocument: { uri: `file://${args.file_path}` }
     };
@@ -1195,7 +1261,9 @@ export class McpServer {
    */
   private async getServerCapabilities(args: GetServerCapabilities, toolCapabilities?: ToolCapabilities[]): Promise<unknown> {
     const error = this.validate(args, ['language_id']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
     }
@@ -1226,7 +1294,9 @@ export class McpServer {
    */
   private async getServerProjects(args: GetServerProjects): Promise<unknown> {
     const error = this.validate(args, ['language_id']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     if (!this.config.hasServerConfig(args.language_id)) {
       return `Language server '${args.language_id}' is not configured.`;
     }
@@ -1318,7 +1388,9 @@ export class McpServer {
    */
   private async getSignature(args: GetSignature): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1338,7 +1410,9 @@ export class McpServer {
    */
   private async getSubtypes(args: GetSubtypes): Promise<unknown> {
     const error = this.validate(args, ['item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TypeHierarchySubtypesParams = {
       item: args.item
     };
@@ -1358,7 +1432,9 @@ export class McpServer {
    */
   private async getSupertypes(args: GetSupertypes): Promise<unknown> {
     const error = this.validate(args, ['item']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TypeHierarchySupertypesParams = {
       item: args.item
     };
@@ -1378,7 +1454,9 @@ export class McpServer {
    */
   private async getSymbolDefinitions(args: GetSymbolDefinitions): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1398,7 +1476,9 @@ export class McpServer {
    */
   private async getSymbolReferences(args: GetSymbolReferences): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: ReferenceParams = {
       context: { includeDeclaration: args.include_declaration ?? true },
       position: { character: args.character, line: args.line },
@@ -1419,7 +1499,9 @@ export class McpServer {
    */
   private async getSymbolRenames(args: GetSymbolRenames): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line', 'new_name']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: RenameParams = {
       newName: args.new_name,
       position: { character: args.character, line: args.line },
@@ -1440,7 +1522,9 @@ export class McpServer {
    */
   private async getSymbols(args: GetSymbols): Promise<unknown> {
     const error = this.validate(args, ['file_path']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const timer = Date.now();
     const params = {
       textDocument: { uri: `file://${args.file_path}` }
@@ -1469,7 +1553,9 @@ export class McpServer {
    */
   private async getTypeDefinitions(args: GetTypeDefinitions): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TextDocumentPositionParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1489,7 +1575,9 @@ export class McpServer {
    */
   private async getTypeHierarchy(args: GetTypeHierarchy): Promise<unknown> {
     const error = this.validate(args, ['character', 'file_path', 'line']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     const params: TypeHierarchyPrepareParams = {
       position: { character: args.character, line: args.line },
       textDocument: { uri: `file://${args.file_path}` }
@@ -1566,7 +1654,9 @@ export class McpServer {
    */
   private async restartServer(args: RestartServer): Promise<unknown> {
     const error = this.validate(args, ['language_id', 'project']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     return await this.client.restartServer(args.language_id, args.project);
   }
 
@@ -1693,7 +1783,9 @@ export class McpServer {
    */
   private async startServer(args: StartServer): Promise<unknown> {
     const error = this.validate(args, ['language_id']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     return await this.client.startServer(args.language_id, args.project);
   }
 
@@ -1709,7 +1801,9 @@ export class McpServer {
    */
   private async stopServer(args: StopServer): Promise<unknown> {
     const error = this.validate(args, ['language_id']);
-    if (error) return error;
+    if (error) {
+      return error;
+    }
     if (!this.client.isServerRunning(args.language_id)) {
       return `Language server '${args.language_id}' is not running.`;
     }

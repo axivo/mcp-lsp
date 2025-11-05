@@ -166,7 +166,9 @@ export class McpTool {
         properties: {
           character: { type: 'number', description: 'Character position (zero-based)' },
           file_path: { type: 'string', description: 'Path to the project file' },
-          line: { type: 'number', description: 'Line number (zero-based)' }
+          line: { type: 'number', description: 'Line number (zero-based)' },
+          limit: { type: 'number', description: 'Pagination limit for number of completions to return', default: this.limit },
+          offset: { type: 'number', description: 'Pagination offset for number of completions to skip', default: 0 }
         },
         required: ['character', 'file_path', 'line']
       },
@@ -636,7 +638,8 @@ export class McpTool {
       _meta: {
         usage: [
           'Field `supported` defines which tools can be used with language server',
-          'Returns capabilities metadata including tool definitions and usage notes'
+          'Returns capabilities metadata including tool definitions and usage notes',
+          'Returns tools that can be used with language server'
         ]
       }
     };

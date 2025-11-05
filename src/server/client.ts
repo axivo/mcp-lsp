@@ -11,7 +11,7 @@ import fg from 'fast-glob';
 import find, { ProcessInfo } from 'find-process';
 import gracefulFs from 'graceful-fs';
 import { ChildProcess, exec, spawn } from 'node:child_process';
-import { dirname, isAbsolute, join } from 'node:path';
+import { isAbsolute, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { promisify } from 'node:util';
 import pLimit from 'p-limit';
@@ -70,6 +70,7 @@ import {
   WorkspaceSymbolRequest
 } from 'vscode-languageserver-protocol';
 import { Config, ProjectConfig } from './config.js';
+import { Logger } from './logger.js';
 
 /**
  * Standardized response format for MCP tool execution
@@ -113,6 +114,7 @@ export class Client {
   private config: Config;
   private connections: Map<string, ServerConnection> = new Map();
   private initializedProjects: Set<string> = new Set();
+  private logger: Logger;
   private openedFiles: Map<string, Set<string>> = new Map();
   private projectFiles: Map<string, string[]> = new Map();
   private projectId: Map<string, string> = new Map();
@@ -122,20 +124,39 @@ export class Client {
   private serverStartTimes: Map<string, number> = new Map();
   private readonly execAsync = promisify(exec);
   private readonly readFileAsync = promisify(gracefulFs.readFile);
-  private readonly readFileSync = gracefulFs.readFileSync;
   private static readonly FallbackFilesLimit = 10;
 
   /**
    * Creates a new Client instance
    * 
-   * @param {string} configPath - Path to the language server configuration file
+   * @param {Config} config - Validated configuration instance
+   * @param {Logger} logger - Logger instance for structured logging
    * @param {string} query - Default query
    */
-  constructor(configPath: string, query: string) {
-    this.config = Config.load(configPath);
+  constructor(config: Config, logger: Logger, query: string) {
+    this.config = config;
+    this.logger = logger;
     this.query = query;
     process.on('SIGINT', () => this.shutdown());
     process.on('SIGTERM', () => this.shutdown());
+  }
+
+  /**
+   * Gets package version from package.json
+   * 
+   * Reads version from package.json using URL resolution relative to module.
+   * Returns error message string if reading fails rather than throwing.
+   * 
+   * @returns {string} Package version string or error message
+   */
+  static version(): string {
+    try {
+      const packagePath = fileURLToPath(new URL('../../package.json', import.meta.url));
+      const packageJson = JSON.parse(gracefulFs.readFileSync(packagePath, 'utf8'));
+      return packageJson.version;
+    } catch (error) {
+      return `Failed to read package.json version. ${error}`;
+    }
   }
 
   /**
@@ -177,6 +198,8 @@ export class Client {
     const key = `ratelimit:${languageId}:${Math.floor(now / serverConfig.settings.rateLimitWindowMs)}`;
     const current = this.rateLimiter.get(key) ?? 0;
     if (current >= serverConfig.settings.rateLimitMaxRequests) {
+      const logMessage = `Rate limit exceeded: ${current}/${serverConfig.settings.rateLimitMaxRequests} requests`;
+      this.logger.log({ languageId, level: 'warning', message: logMessage });
       return false;
     }
     this.rateLimiter.set(key, current + 1);
@@ -210,22 +233,26 @@ export class Client {
     const serverConfig = this.config.getServerConfig(languageId);
     if (serverConfig.configuration && Object.keys(serverConfig.configuration).length) {
       connection.onRequest(ConfigurationRequest.method, (params: ConfigurationParams) => {
+        const logMessage = 'ConfigurationRequest received: returning server configuration';
+        this.logger.log({ languageId, level: 'debug', message: logMessage });
         return [serverConfig.configuration];
       });
     }
-    if (serverConfig.settings.messageRequest === false) {
-      connection.onRequest(ShowMessageRequest.method, (params: ShowMessageParams) => {
-        return null;
-      });
-    }
-    if (serverConfig.settings.registrationRequest === false) {
-      connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
-        return {};
-      });
-      connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
-        return {};
-      });
-    }
+    connection.onRequest(ShowMessageRequest.method, (params: ShowMessageParams) => {
+      const logMessage = 'ShowMessageRequest received and suppressed: returning null';
+      this.logger.log({ languageId, level: 'debug', message: logMessage });
+      return null;
+    });
+    connection.onRequest(RegistrationRequest.method, (params: RegistrationParams) => {
+      const logMessage = 'RegistrationRequest received and suppressed: returning empty object';
+      this.logger.log({ languageId, level: 'debug', message: logMessage });
+      return {};
+    });
+    connection.onRequest(UnregistrationRequest.method, (params: UnregistrationParams) => {
+      const logMessage = 'UnregistrationRequest received and suppressed: returning empty object';
+      this.logger.log({ languageId, level: 'debug', message: logMessage });
+      return {};
+    });
     connection.listen();
     return connection;
   }
@@ -415,10 +442,7 @@ export class Client {
     }];
     const initParams: InitializeParams = {
       capabilities: this.setClientCapabilities(languageId),
-      clientInfo: {
-        name: 'mcp-lsp-client',
-        version: this.version(),
-      },
+      clientInfo: { name: 'mcp-lsp-client', version: Client.version() },
       initializationOptions: serverConfig.configuration ?? {},
       processId: process.pid,
       rootPath: projectConfig.path,
@@ -442,9 +466,7 @@ export class Client {
           InitializeRequest.method,
           initParams,
           tokenSource.token
-        ).then(result => {
-          return result;
-        }),
+        ),
         timeout
       ]) as InitializeResult;
       serverConnection.capabilities = initializeResult.capabilities;
@@ -454,19 +476,35 @@ export class Client {
       const projectFiles = this.projectFiles.get(project);
       try {
         if (projectFiles && projectFiles.length) {
-          if (serverConfig.settings.preloadFiles === true) {
-            await this.openFiles(languageId, project, projectFiles);
-          }
-          if (serverConfig.settings.workspace === true) {
-            const params = { query: this.query };
-            await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+          let openFiles = false;
+          const capabilities = this.getServerCapabilities(languageId);
+          if (capabilities && capabilities.workspaceSymbolProvider === true) {
+            try {
+              const params = { query: this.query };
+              await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+              const logMessage = 'WorkspaceSymbolRequest success: openFiles after initialization';
+              this.logger.log({ languageId, level: 'debug', message: logMessage });
+            } catch (error) {
+              openFiles = true;
+              const logMessage = 'WorkspaceSymbolRequest failure: openFiles before retry';
+              this.logger.log({ languageId, level: 'debug', message: logMessage });
+              await this.openFiles(languageId, project, projectFiles);
+              const params = { query: this.query };
+              await serverConnection.connection.sendRequest(WorkspaceSymbolRequest.method, params);
+            }
           }
           serverConnection.initialized = true;
-          if (serverConfig.settings.preloadFiles === false) {
+          const logMessage = 'Server initialization completed: ready for requests';
+          this.logger.log({ languageId, level: 'info', message: logMessage });
+          if (!openFiles) {
+            const logMessage = 'Server initialization completed: openFiles required';
+            this.logger.log({ languageId, level: 'debug', message: logMessage });
             await this.openFiles(languageId, project, projectFiles);
           }
         }
       } catch (error) {
+        const logMessage = `Server initialization failed: ${error}`;
+        this.logger.log({ languageId, level: 'error', message: logMessage });
         serverConnection.initialized = false;
       }
     } finally {
@@ -708,6 +746,9 @@ export class Client {
   /**
    * Gets the project name for a specific language ID
    * 
+   * Retrieves the currently active project name associated with a language server.
+   * Returns undefined if no project is running for the specified language.
+   * 
    * @param {string} languageId - Language identifier
    * @returns {string | undefined} Project name for the language, or undefined if not found
    */
@@ -718,9 +759,12 @@ export class Client {
   /**
    * Gets the cached project files for a specific project
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} project - Project name
-   * @returns {Promise<string[] | null>} Promise that resolves with array of file paths or null if not found
+   * Retrieves the list of discovered files from cache or performs file discovery
+   * if cache is empty. Returns null if server or project configuration is invalid.
+   * 
+   * @param {string} languageId - Language identifier for server configuration lookup
+   * @param {string} project - Project name to retrieve files for
+   * @returns {Promise<string[] | null>} Promise that resolves with array of absolute file paths, or null if configuration invalid
    */
   async getProjectFiles(languageId: string, project: string): Promise<string[] | null> {
     if (!this.config.hasServerConfig(languageId)) {
@@ -741,14 +785,21 @@ export class Client {
 
   /**
    * Gets server capabilities for a specific language server
-   *
-   * @param {string} languageId - Language identifier
-   * @returns {ServerCapabilities | undefined} Server capabilities or undefined if not available
+   * 
+   * Retrieves LSP capabilities from initialized server connection.
+   * Returns undefined if server is not running or not yet initialized.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {ServerCapabilities | undefined} LSP server capabilities object, or undefined if server not available or not initialized
    */
   getServerCapabilities(languageId: string): ServerCapabilities | undefined {
     const project = this.projectId.get(languageId);
     if (project) {
       const serverConnection = this.connections.get(project);
+      if (serverConnection?.capabilities) {
+        const logMessage = `Server capabilities retrieved: ${JSON.stringify(serverConnection.capabilities)}`;
+        this.logger.log({ languageId, level: 'debug', message: logMessage });
+      }
       return serverConnection?.capabilities;
     }
     return undefined;
@@ -757,8 +808,11 @@ export class Client {
   /**
    * Gets server connection for status checking
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {ServerConnection | undefined} Server connection or undefined
+   * Retrieves the active server connection object including process and initialization state.
+   * Used primarily for status monitoring and diagnostic operations.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {ServerConnection | undefined} Server connection with process and state information, or undefined if not running
    */
   getServerConnection(languageId: string): ServerConnection | undefined {
     const project = this.projectId.get(languageId);
@@ -771,7 +825,10 @@ export class Client {
   /**
    * Gets all configured servers
    * 
-   * @returns {string[]} Array of servers
+   * Retrieves the complete list of language server identifiers from configuration.
+   * Includes both running and non-running servers.
+   * 
+   * @returns {string[]} Array of language server identifiers from configuration
    */
   getServers(): string[] {
     return this.config.getServers();
@@ -780,8 +837,11 @@ export class Client {
   /**
    * Gets the uptime of a specific language server in milliseconds
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {number} Uptime in milliseconds, or 0 if server not running
+   * Calculates elapsed time since server startup using cached start timestamp.
+   * Returns zero if server is not currently running.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {number} Server uptime in milliseconds since startup, or 0 if server not running
    */
   getServerUptime(languageId: string): number {
     const project = this.projectId.get(languageId);
@@ -797,9 +857,12 @@ export class Client {
   /**
    * Checks if a language server is alive and can handle the specified project path
    * 
-   * @param {string} languageId - Language identifier
-   * @param {string} path - Project path to validate against server configuration
-   * @returns {boolean} True if server is alive and can handle the project
+   * Validates that the server is running and that the specified path falls within
+   * the server's configured project path. Used for routing file requests to appropriate servers.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @param {string} path - Absolute file or project path to validate against server configuration
+   * @returns {boolean} True if server is running and path is within server's project scope, false otherwise
    */
   isServerAlive(languageId: string, path: string): boolean {
     const project = this.projectId.get(languageId);
@@ -814,8 +877,11 @@ export class Client {
   /**
    * Checks if a specific language server is currently running
    * 
-   * @param {string} languageId - Language identifier
-   * @returns {boolean} True if server is running
+   * Verifies that a server process exists and has an active connection.
+   * Does not check initialization or readiness state.
+   * 
+   * @param {string} languageId - Language identifier for server lookup
+   * @returns {boolean} True if server process is running with active connection, false otherwise
    */
   isServerRunning(languageId: string): boolean {
     const project = this.projectId.get(languageId);
@@ -1074,6 +1140,8 @@ export class Client {
       return this.response(`Language server '${languageId}' with '${runningProject}' project is already running.`);
     }
     try {
+      const logMessage = 'Server start initiated: spawning language server process';
+      this.logger.log({ languageId, level: 'debug', message: logMessage });
       const timer = Date.now();
       if (config.server.init?.length) {
         for (const command of config.server.init) {
@@ -1145,10 +1213,19 @@ export class Client {
     }
     const languageId = this.getLanguageId(project);
     if (languageId) {
+      const logMessage = 'Server shutdown started: sending LSP ShutdownRequest';
+      this.logger.log({ languageId, level: 'debug', message: logMessage });
+    }
+    if (languageId) {
       const serverConfig = this.config.getServerConfig(languageId);
       try {
         await serverConnection.connection.sendRequest(ShutdownRequest.method, {});
-      } catch (error) { }
+        const logMessage = 'LSP ShutdownRequest completed: waiting for grace period';
+        this.logger.log({ languageId, level: 'debug', message: logMessage });
+      } catch (error) {
+        const logMessage = `LSP ShutdownRequest failed: ${error}`;
+        this.logger.log({ languageId, level: 'debug', message: logMessage });
+      }
       await new Promise(resolve => setTimeout(resolve, serverConfig.settings.shutdownGracePeriodMs));
       this.projectId.delete(languageId);
     }
@@ -1172,25 +1249,9 @@ export class Client {
     this.openedFiles.delete(project);
     this.projectFiles.delete(project);
     this.serverStartTimes.delete(project);
-  }
-
-  /**
-   * Gets package version from package.json
-   * 
-   * Reads version from package.json relative to current module location.
-   * Returns error message string if reading fails rather than throwing.
-   * 
-   * @returns {string} Package version string or error message
-   */
-  version(): string {
-    try {
-      const __filename = fileURLToPath(import.meta.url);
-      const __dirname = dirname(__filename);
-      const packagePath = join(__dirname, '../../package.json');
-      const packageJson = JSON.parse(this.readFileSync(packagePath, 'utf8'));
-      return packageJson.version;
-    } catch (error) {
-      return `Failed to read package.json version. ${error}`;
+    if (languageId) {
+      const logMessage = 'Server shutdown completed: process terminated and cleanup finished';
+      this.logger.log({ languageId, level: 'info', message: logMessage });
     }
   }
 }
