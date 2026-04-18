@@ -1088,9 +1088,15 @@ export class Client {
           }
         }
       }
-      const processes = await (find as unknown as {
-        default: (by: string, value: string) => Promise<ProcessInfo[]>
-      }).default('name', config.server.command);
+      const findProcess = typeof find === 'function'
+        ? find
+        : (find as unknown as {
+            default?: (by: string, value: string) => Promise<ProcessInfo[]>
+          }).default;
+      if (typeof findProcess !== 'function') {
+        throw new TypeError(`find-process export is not callable: ${typeof findProcess}`);
+      }
+      const processes = await findProcess('name', config.server.command);
       processes.forEach((proc: ProcessInfo) => {
         process.kill(proc.pid, 'SIGTERM');
       });
